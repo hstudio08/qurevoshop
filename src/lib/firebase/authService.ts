@@ -20,7 +20,7 @@ export const registerShop = async (data: any) => {
     country: data.country || "India",
     pincode: data.pincode,
     businessCategory: data.businessCategory || "Retail",
-    role: "ShopOwner",
+    role: data.email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL ? "Admin" : "ShopOwner",
     isActive: true,
     createdAt: new Date(),
   };
@@ -33,7 +33,28 @@ export const registerShop = async (data: any) => {
   return { user: userCredential.user, shop: shopData };
 };
 
-export const getShopDetails = async (uid: string): Promise<Shop | null> => {
+export const getShopDetails = async (uid: string, email?: string | null): Promise<Shop | null> => {
+  // HARDCODED OVERRIDE: Intercept the predefined Super Admin Email
+  if (email && email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
+    return {
+      id: uid,
+      ownerUid: uid,
+      ownerName: "Haadi (Super Admin)",
+      shopName: "QUREVO SYSTEM",
+      email: email,
+      role: "Admin",
+      mobileNumber: "SECURED",
+      personalAddress: "SECURED",
+      shopAddress: "Global Administration",
+      state: "N/A",
+      country: "India",
+      pincode: "N/A",
+      businessCategory: "Platform Administration",
+      isActive: true,
+      createdAt: new Date(),
+    } as Shop;
+  }
+
   const docRef = doc(db, "shops", uid);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {

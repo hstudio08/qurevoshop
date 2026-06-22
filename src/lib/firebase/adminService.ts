@@ -8,10 +8,8 @@ export const getAllPlatformShops = async (): Promise<Shop[]> => {
   const shops: Shop[] = [];
   snapshot.forEach(doc => {
     const data = doc.data();
-    // Exclude hidden shops
-    if (!data.isHidden) {
-      shops.push({ ...data, id: doc.id, createdAt: data.createdAt?.toDate() || new Date() } as Shop);
-    }
+    // Do NOT filter out hidden shops here; Super Admin needs to see everything!
+    shops.push({ ...data, id: doc.id, createdAt: data.createdAt?.toDate() || new Date() } as Shop);
   });
   return shops;
 };
@@ -24,4 +22,9 @@ export const toggleShopStatusDB = async (shopId: string, currentStatus: boolean)
 export const hideShopFromDB = async (shopId: string) => {
   const shopRef = doc(db, "shops", shopId);
   await updateDoc(shopRef, { isHidden: true, isActive: false }); // Soft delete & Suspend
+};
+
+export const restoreShopFromDB = async (shopId: string) => {
+  const shopRef = doc(db, "shops", shopId);
+  await updateDoc(shopRef, { isHidden: false, isActive: true }); // Unhide & Reactivate
 };

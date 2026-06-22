@@ -31,17 +31,26 @@ export interface Product {
   updatedAt: Date;
 }
 
-export interface Sale {
-  id: string;
-  shopId: string;
+// Add this interface
+export interface SaleItem {
   productId: string;
   productName: string;
   quantity: number;
-  unitPrice: number; // NEW: To track custom bargained price
+  unitPrice: number;
+  costPrice: number;
+}
+
+// Update the Sale interface
+export interface Sale {
+  id: string;
+  shopId: string;
+  items: SaleItem[]; // Replaces productId, productName, quantity, unitPrice
   totalAmount: number;
   profit: number;
   customerName?: string;
-  customerAddress?: string; // NEW: For Invoices
+  customerAddress?: string;
   paymentMethod: "Cash" | "Online" | "Credit";
   date: Date;
+  invoiceNumber?: string; // New Invoice Number
 }
+// Keep your other interfaces (Shop, Product, etc.) exactly the same.

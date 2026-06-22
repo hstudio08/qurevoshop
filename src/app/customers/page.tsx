@@ -33,7 +33,6 @@ export default function CustomersPage() {
 
   const filteredCustomers = customerList.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // Get specific customer's purchase history
   const customerHistory = useMemo(() => {
     if (!selectedCustomer) return [];
     return sales.filter(s => s.customerName?.toUpperCase() === selectedCustomer.rawName).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -42,14 +41,14 @@ export default function CustomersPage() {
   return (
     <div className="flex flex-col min-h-screen font-sans">
       <header className="mb-6">
-        <h1 className="text-xl font-black text-gray-900 font-bebas tracking-wide">Customer Directory</h1>
-        <p className="text-xs text-gray-500">Track lifetime value and view purchase history</p>
+        <h1 className="text-xl lg:text-2xl font-black text-gray-900 font-bebas tracking-wide">Customer Directory</h1>
+        <p className="text-[11px] sm:text-xs text-gray-500">Track lifetime value and view purchase history</p>
       </header>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-3 border-b border-gray-100 relative bg-gray-50/50">
-          <input type="text" placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full text-xs border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 focus:ring-1 focus:ring-baltic-blue outline-none" />
-          <Search size={16} className="absolute left-6 top-5 text-gray-400" />
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="p-3 sm:p-4 border-b border-gray-100 relative bg-gray-50/50">
+          <input type="text" placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full text-xs sm:text-sm border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 focus:ring-2 focus:ring-baltic-blue outline-none" />
+          <Search size={16} className="absolute left-6 top-5 sm:top-5 text-gray-400" />
         </div>
 
         <div className="divide-y divide-gray-100">
@@ -60,20 +59,25 @@ export default function CustomersPage() {
             </div>
           ) : (
             filteredCustomers.map((customer, i) => (
-              <div key={i} onClick={() => setSelectedCustomer(customer)} className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition">
+              <div key={i} onClick={() => setSelectedCustomer(customer)} className="p-4 sm:p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-blue-50 text-baltic-blue flex items-center justify-center font-bold text-sm">
                     {customer.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">{customer.name}</h3>
-                    <p className="text-[10px] text-gray-500">Last: {customer.lastVisit.toLocaleDateString()}</p>
+                    <p className="text-[10px] text-gray-500 font-medium">Last: {customer.lastVisit.toLocaleDateString()}</p>
                   </div>
                 </div>
+                
                 <div className="flex items-center gap-4 text-right">
+                  <div className="hidden sm:block mr-4 text-center">
+                     <p className="text-[10px] text-gray-400 uppercase tracking-widest">Visits</p>
+                     <p className="text-sm font-bold text-gray-900 tabular-nums">{customer.totalVisits}</p>
+                  </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase">LTV</p>
-                    <p className="text-sm font-bold text-sage-green font-ibm tracking-tighter">₹{customer.totalSpent.toLocaleString()}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">Lifetime Value</p>
+                    <p className="text-sm sm:text-lg font-black text-sage-green font-ibm tracking-tight">₹{customer.totalSpent.toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -82,59 +86,54 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Details Modal */}
       {selectedCustomer && (
         <div className="fixed inset-0 z-50 bg-black/60 flex justify-end">
           <div className="bg-white w-full max-w-md h-full shadow-2xl animate-in slide-in-from-right flex flex-col">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <div>
-                <h2 className="text-lg font-black text-gray-900">{selectedCustomer.name}</h2>
+                <h2 className="text-lg font-black text-gray-900 font-bebas tracking-wide">{selectedCustomer.name}</h2>
                 <p className="text-xs text-gray-500">Lifetime History: {selectedCustomer.totalVisits} visits</p>
               </div>
               <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white rounded-full text-gray-500 hover:text-red-500 shadow-sm border border-gray-200"><X size={18}/></button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              {customerHistory.map(sale => {
-                // Calculate if they got a discount relative to the profit margin
-                const costPrice = sale.totalAmount - sale.profit;
-                const cpPerUnit = costPrice / sale.quantity;
-                const isDiscounted = sale.unitPrice < (cpPerUnit * 1.2); // Rough estimation logic if original SP isn't present
-                
-                return (
-                  <div key={sale.id} className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-2">
-                        <Package size={14} className="text-baltic-blue"/>
-                        <h4 className="text-sm font-bold text-gray-900">{sale.productName}</h4>
-                      </div>
-                      <span className="text-[10px] text-gray-500">{new Date(sale.date).toLocaleDateString()}</span>
+              {customerHistory.map(sale => (
+                <div key={sale.id} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+                  <div className="flex justify-between items-start mb-2 border-b border-gray-50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-bold uppercase tracking-wider">{sale.invoiceNumber || "SALE"}</span>
                     </div>
-                    
-                    <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded-lg text-center mt-2 border border-gray-100">
-                      <div>
-                        <p className="text-[9px] text-gray-400 uppercase">Qty</p>
-                        <p className="text-xs font-bold text-gray-700">{sale.quantity}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-gray-400 uppercase">Unit Price</p>
-                        <p className="text-xs font-bold text-gray-700 font-ibm">₹{sale.unitPrice}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-gray-400 uppercase">Total Paid</p>
-                        <p className="text-xs font-bold text-sage-green font-ibm">₹{sale.totalAmount}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center mt-3 pt-2 border-t border-dashed border-gray-200">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${sale.paymentMethod === 'Credit' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                        {sale.paymentMethod}
-                      </span>
-                      {isDiscounted && <span className="text-[10px] font-bold text-orange-500">Bargained / Discounted</span>}
-                    </div>
+                    <span className="text-[10px] text-gray-500 font-bold">{new Date(sale.date).toLocaleDateString()}</span>
                   </div>
-                );
-              })}
+                  
+                  {/* MULTI-ITEM SUPPORT: Render all items mapped dynamically */}
+                  <div className="space-y-1.5 mt-3">
+                    {sale.items?.map((item, idx) => {
+                      const isDiscounted = item.unitPrice < item.costPrice * 1.1; // Simple logic approximation
+                      return (
+                        <div key={idx} className="flex flex-col text-xs bg-gray-50/50 p-2 rounded-lg border border-gray-100">
+                           <div className="flex justify-between items-center">
+                             <span className="font-bold text-gray-800">{item.quantity}x {item.productName}</span>
+                             <span className="font-black text-gray-900 font-ibm">₹{item.unitPrice * item.quantity}</span>
+                           </div>
+                           <div className="flex justify-between mt-1">
+                              <span className="text-[9px] text-gray-500">@ ₹{item.unitPrice}/unit</span>
+                              {isDiscounted && <span className="text-[9px] font-bold text-orange-500">Discounted</span>}
+                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-dashed border-gray-200">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${sale.paymentMethod === 'Credit' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                      {sale.paymentMethod}
+                    </span>
+                    <span className="text-sm font-black text-sage-green font-ibm">TOTAL: ₹{sale.totalAmount.toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

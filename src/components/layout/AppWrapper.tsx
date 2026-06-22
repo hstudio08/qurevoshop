@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "./BottomNav";
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, ShieldCheck, Menu, Bell, UserSquare, Store } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Users, Settings, ShieldCheck, UserSquare } from "lucide-react";
 
 export default function AppWrapper({ children }: { children: React.ReactNode }) {
   const { setAuth, loading, user, shop } = useAuthStore();
@@ -19,9 +19,11 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const shopDetails = await getShopDetails(firebaseUser.uid);
+        const shopDetails = await getShopDetails(firebaseUser.uid, firebaseUser.email);
         setAuth(firebaseUser, shopDetails);
-        if (isPublicPage) router.push("/dashboard");
+        if (isPublicPage) {
+          router.push(shopDetails?.role === "Admin" ? "/admin" : "/dashboard");
+        }
       } else {
         setAuth(null, null);
         if (!isPublicPage) router.push("/login");
@@ -32,17 +34,22 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-baltic-blue font-bebas text-2xl tracking-widest">LOADING QUREVO...</div>;
 
-  const navItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Products", href: "/products", icon: Package },
-    { name: "Sales & Billing", href: "/sales", icon: ShoppingCart },
-    { name: "Credits", href: "/credits", icon: Users },
-    { name: "Customers", href: "/customers", icon: UserSquare },
-    { name: "Settings", href: "/settings", icon: Settings },
-  ];
-
+  // DYNAMIC NAVIGATION: Super Admin gets a dedicated view
+  let navItems = [];
   if (shop?.role === "Admin") {
-    navItems.push({ name: "Super Admin", href: "/admin", icon: ShieldCheck });
+    navItems = [
+      { name: "Super Admin", href: "/admin", icon: ShieldCheck },
+      { name: "Settings", href: "/settings", icon: Settings },
+    ];
+  } else {
+    navItems = [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Products", href: "/products", icon: Package },
+      { name: "Sales & Billing", href: "/sales", icon: ShoppingCart },
+      { name: "Credits", href: "/credits", icon: Users },
+      { name: "Customers", href: "/customers", icon: UserSquare },
+      { name: "Settings", href: "/settings", icon: Settings },
+    ];
   }
 
   const getAvatar = (name: string) => {
@@ -54,15 +61,17 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc] font-sans">
-      {/* DESKTOP SIDEBAR - Slimmer & more elegant */}
+      {/* DESKTOP SIDEBAR */}
       {user && !isPublicPage && (
         <aside className="hidden lg:flex flex-col w-[220px] bg-white border-r border-gray-200 fixed h-full z-40 shadow-sm">
-          <div className="px-5 py-6 flex items-center justify-start border-b border-gray-100">
+          <div className="px-5 py-6 flex items-center justify-start border-b border-gray-100 h-[64px]">
             <img src="https://res.cloudinary.com/dpqsadqxj/image/upload/v1782143700/logo_pwered_by_qurevo_qpbgdp.png" alt="Qurevo" className="h-6 object-contain" />
           </div>
           
           <nav className="flex-1 px-3 py-5 space-y-1.5 custom-scrollbar overflow-y-auto">
-            <p className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Main Menu</p>
+            <p className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+              {shop?.role === "Admin" ? "Administration" : "Main Menu"}
+            </p>
             {navItems.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
@@ -90,27 +99,16 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
       {/* MAIN CONTENT AREA */}
       <div className={`flex-1 flex flex-col transition-all w-full ${user && !isPublicPage ? "lg:ml-[220px]" : ""}`}>
         
-        {/* SLEEK TOP HEADER */}
+        {/* DESKTOP ONLY TOP HEADER */}
         {user && !isPublicPage && (
-          <header className="h-[64px] bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30">
-            <button className="lg:hidden p-2 -ml-2 text-gray-600 rounded-lg hover:bg-gray-100 transition"><Menu size={20} /></button>
-            
-            <div className="flex items-center gap-3 ml-auto">
-              <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition">
-                <Bell size={18} />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-              </button>
-              
-              <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
-
-              <div className="flex items-center gap-3 cursor-pointer group pl-1 sm:pl-0">
-                <div className="hidden sm:flex flex-col items-end leading-none">
-                  <span className="text-[13px] font-bold text-gray-900 group-hover:text-baltic-blue transition">{shop?.shopName}</span>
-                  <span className="text-[10px] font-medium text-gray-500">{shop?.ownerName}</span>
-                </div>
-                <div className="w-8 h-8 bg-baltic-blue text-white rounded-lg flex items-center justify-center font-bold text-sm font-bebas shadow-sm group-hover:shadow-md group-hover:-translate-y-0.5 transition-all overflow-hidden border border-blue-700/20">
-                  {shop?.shopLogoUrl ? <img src={shop.shopLogoUrl} className="w-full h-full object-cover" alt="Logo"/> : getAvatar(shop?.shopName || "Store")}
-                </div>
+          <header className="hidden lg:flex h-[64px] bg-white/80 backdrop-blur-md border-b border-gray-200 items-center justify-end px-8 sticky top-0 z-30">
+            <div className="flex items-center gap-3 cursor-pointer group">
+              <div className="flex flex-col items-end leading-none">
+                <span className="text-[13px] font-bold text-gray-900 group-hover:text-baltic-blue transition">{shop?.shopName}</span>
+                <span className="text-[10px] font-medium text-gray-500">{shop?.ownerName}</span>
+              </div>
+              <div className="w-8 h-8 bg-baltic-blue text-white rounded-lg flex items-center justify-center font-bold text-sm font-bebas shadow-sm border border-blue-700/20 overflow-hidden group-hover:-translate-y-0.5 transition-transform">
+                 {shop?.shopLogoUrl ? <img src={shop.shopLogoUrl} className="w-full h-full object-cover" alt="Logo"/> : getAvatar(shop?.shopName || "Store")}
               </div>
             </div>
           </header>
