@@ -1,0 +1,16 @@
+{
+  "name": "Qurevo Shop",
+  "short_name": "Qurevo",
+  "description": "Smart Shop Management",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#05668d",
+  "icons": [
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
