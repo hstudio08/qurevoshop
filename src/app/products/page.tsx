@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Plus, Package, AlertTriangle, Trash2, PlusCircle, MinusCircle, MoreVertical, Edit2 } from "lucide-react";
+import { Search, Plus, Package, AlertTriangle, Trash2, PlusCircle, MinusCircle, MoreVertical, Edit2, Layers } from "lucide-react";
 import { useProductStore } from "@/store/useProductStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import toast from "react-hot-toast";
@@ -51,34 +51,53 @@ export default function ProductsPage() {
   };
 
   return (
-    // CHANGED: Expanded max-w-md to max-w-5xl for proper desktop usage
-    <div className="pb-24 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 font-sans">
+    <div className="pb-24 max-w-5xl mx-auto w-full px-3 sm:px-6 lg:px-8 font-sans bg-slate-50 min-h-screen">
       
-      {/* Header & Controls */}
-      <div className="sticky top-[64px] lg:top-0 bg-[#f4f7f9] z-20 pt-6 pb-4">
+      {/* OPTIMIZED MOBILE HEADER
+        - Removed pt-6 gap 
+        - top-0 instead of top-[64px] (assumes parent layout handles its own scroll container cleanly)
+        - Backdrop blur for clean scrolling 
+      */}
+      <div className="sticky top-0 z-30 pt-3 pb-3 sm:pt-6 sm:pb-4 bg-slate-50/90 backdrop-blur-md border-b border-slate-200/50 -mx-3 px-3 sm:mx-0 sm:px-0 mb-4">
         
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <div>
-             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Catalog</h1>
-             <p className="text-sm text-gray-500 font-medium">{products.length} Unique Products</p>
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div className="flex items-center gap-2">
+            <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600 hidden sm:block">
+              <Layers size={20} />
+            </div>
+            <div>
+               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-none">Catalog</h1>
+               <p className="text-[11px] sm:text-sm text-slate-500 font-semibold mt-1">{products.length} Products</p>
+            </div>
           </div>
           
-          {/* CHANGED: Re-added explicit Desktop Button */}
-          <button onClick={openAddModal} className="hidden sm:flex items-center gap-2 bg-baltic-blue text-white px-6 py-3 rounded-xl text-sm font-bold shadow-md hover:bg-rich-cerulean transition active:scale-95">
-            <Plus size={18} /> Add New Product
+          {/* Desktop Add Button */}
+          <button onClick={openAddModal} className="hidden sm:flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition active:scale-95">
+            <Plus size={18} /> Add Product
           </button>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+        {/* Search & Filters in a tight mobile row */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
           <div className="relative flex-1">
-            <input type="text" placeholder="Search inventory..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full text-sm border border-gray-200 rounded-2xl pl-11 pr-4 py-3 bg-white focus:ring-2 focus:ring-baltic-blue outline-none shadow-sm font-medium" />
-            <Search size={18} className="absolute left-4 top-3.5 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Search inventory..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="w-full text-sm font-medium border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 bg-white focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none shadow-sm transition-all" 
+            />
+            <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
           </div>
           
-          {/* Filter Chips */}
-          <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
+          {/* Filter Chips - Horizontally scrollable on mobile */}
+          <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 sm:pb-0 shrink-0">
             {["All", "Low Stock", "Out of Stock"].map(filter => (
-              <button key={filter} onClick={() => setActiveFilter(filter as any)} className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all border shadow-sm ${activeFilter === filter ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+              <button 
+                key={filter} 
+                onClick={() => setActiveFilter(filter as any)} 
+                className={`whitespace-nowrap px-4 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all border shadow-sm ${activeFilter === filter ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+              >
                 {filter}
               </button>
             ))}
@@ -86,46 +105,54 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* CHANGED: Converted to Responsive Grid for Desktop */}
-      {isLoading ? <div className="p-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest mt-8">Loading...</div> : 
-        filteredProducts.length === 0 ? <div className="p-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest mt-8">No products found.</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-2">
+      {/* PRODUCT LISTING */}
+      {isLoading ? (
+        <div className="p-12 text-center text-sm font-bold text-slate-400 uppercase tracking-widest animate-pulse">Syncing Inventory...</div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="p-16 flex flex-col items-center justify-center text-slate-400">
+          <Package size={48} className="mb-4 opacity-30" />
+          <p className="text-sm font-bold uppercase tracking-widest">No products found</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filteredProducts.map((product) => {
             const hasImage = product.images && product.images.length > 0;
             const isLowStock = product.currentStock > 0 && product.currentStock <= 10;
             const isOut = product.currentStock === 0;
 
             return (
-              <div key={product.id} className="relative bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
-                <div className="p-3.5 flex items-center justify-between gap-3 flex-1">
+              <div key={product.id} className="relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all overflow-hidden flex flex-col group">
+                <div className="p-3 sm:p-4 flex items-center justify-between gap-3 flex-1">
                   
                   {/* Left: Thumbnail & Details */}
-                  <div className="flex items-center gap-3 overflow-hidden flex-1">
-                    <div className="w-14 h-14 shrink-0 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden relative">
-                      {hasImage ? <img src={product.images![0]} alt={product.name} className="w-full h-full object-cover" /> : <Package size={20} className="text-gray-300"/>}
+                  <div className="flex items-center gap-3 sm:gap-4 overflow-hidden flex-1">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden relative">
+                      {hasImage ? <img src={product.images![0]} alt={product.name} className="w-full h-full object-cover" /> : <Package size={20} className="text-slate-300"/>}
                       {isLowStock && <div className="absolute top-0 right-0 w-3 h-3 bg-orange-500 rounded-full border-2 border-white"></div>}
-                      {isOut && <div className="absolute inset-0 bg-white/60 flex items-center justify-center"><AlertTriangle size={18} className="text-red-500"/></div>}
+                      {isOut && <div className="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-[1px]"><AlertTriangle size={18} className="text-red-500 drop-shadow-md"/></div>}
                     </div>
                     
                     <div className="flex flex-col flex-1 min-w-0">
-                      <h3 className="text-sm font-bold text-gray-900 truncate leading-tight" title={product.name}>{product.name}</h3>
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-500">
-                        <span className={`bg-gray-50 px-1.5 py-0.5 rounded border ${isOut ? 'text-red-600 border-red-100 bg-red-50' : isLowStock ? 'text-orange-600 border-orange-100 bg-orange-50' : 'text-sage-green border-green-100 bg-green-50'}`}>
-                          Qty: {product.currentStock}
+                      <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate" title={product.name}>{product.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                         <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md ${isOut ? 'text-red-700 bg-red-100' : isLowStock ? 'text-orange-700 bg-orange-100' : 'text-emerald-700 bg-emerald-100'}`}>
+                          STOCK: {product.currentStock}
                         </span>
-                        <span className="font-ibm">CP ₹{product.costPrice}</span>
-                        <span className="text-baltic-blue font-ibm">SP ₹{product.sellingPrice}</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-[10px] sm:text-xs font-bold text-slate-500">
+                        <span>CP: ₹{product.costPrice}</span>
+                        <span className="text-indigo-600 font-black">SP: ₹{product.sellingPrice}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Right: Quick Actions */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <div className="flex flex-col items-center bg-gray-50 rounded-lg p-0.5 border border-gray-100">
-                      <button onClick={() => adjustStock(product.id, product.currentStock, 1)} className="p-1 text-gray-400 hover:text-sage-green active:scale-90"><PlusCircle size={16}/></button>
-                      <button onClick={() => adjustStock(product.id, product.currentStock, -1)} className="p-1 text-gray-400 hover:text-red-500 active:scale-90"><MinusCircle size={16}/></button>
+                    <div className="flex flex-col items-center bg-slate-50 rounded-lg p-0.5 border border-slate-200/60">
+                      <button onClick={() => adjustStock(product.id, product.currentStock, 1)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors active:scale-90"><PlusCircle size={16}/></button>
+                      <button onClick={() => adjustStock(product.id, product.currentStock, -1)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors active:scale-90"><MinusCircle size={16}/></button>
                     </div>
-                    <button onClick={() => setActiveActions(activeActions === product.id ? null : product.id)} className="p-2 text-gray-400 hover:text-gray-900 bg-white rounded-lg">
+                    <button onClick={() => setActiveActions(activeActions === product.id ? null : product.id)} className="p-2.5 text-slate-400 hover:text-slate-900 bg-white rounded-xl hover:bg-slate-50 transition-colors">
                       <MoreVertical size={18}/>
                     </button>
                   </div>
@@ -133,9 +160,9 @@ export default function ProductsPage() {
 
                 {/* Expanded Action Drawer */}
                 {activeActions === product.id && (
-                  <div className="bg-gray-50 px-4 py-2.5 border-t border-gray-100 flex justify-end gap-3 animate-in slide-in-from-top-2">
-                    <button onClick={() => openEditModal(product)} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-lg shadow-sm hover:bg-gray-50 active:scale-95"><Edit2 size={14}/> Edit</button>
-                    <button onClick={() => handleDelete(product.id)} className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 text-xs font-bold rounded-lg shadow-sm hover:bg-red-100 active:scale-95"><Trash2 size={14}/> Delete</button>
+                  <div className="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-3 animate-in slide-in-from-top-2">
+                    <button onClick={() => openEditModal(product)} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl shadow-sm hover:bg-slate-100 active:scale-95 transition-all"><Edit2 size={14}/> Edit</button>
+                    <button onClick={() => handleDelete(product.id)} className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 text-xs font-bold rounded-xl shadow-sm hover:bg-red-100 active:scale-95 transition-all"><Trash2 size={14}/> Delete</button>
                   </div>
                 )}
               </div>
@@ -145,7 +172,7 @@ export default function ProductsPage() {
       )}
 
       {/* MOBILE FLOATING ACTION BUTTON (Hidden on Desktop) */}
-      <button onClick={openAddModal} className="sm:hidden fixed bottom-20 right-5 w-14 h-14 bg-baltic-blue text-white rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(5,102,141,0.4)] hover:bg-[#087ca8] active:scale-90 transition-transform duration-200 z-40">
+      <button onClick={openAddModal} className="sm:hidden fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-600/30 hover:bg-indigo-700 active:scale-90 transition-all z-40">
         <Plus size={24} strokeWidth={2.5} />
       </button>
 

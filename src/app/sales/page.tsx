@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Plus, Minus, Trash2, ShoppingCart, User, AlertTriangle, FileText, Eraser } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, User, MapPin, CreditCard, ShieldCheck, PackageOpen } from "lucide-react";
 import { useProductStore } from "@/store/useProductStore";
 import { useSalesStore } from "@/store/useSalesStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import toast from "react-hot-toast";
-import InvoicePreview from "@/components/features/InvoicePreview";
+import SecureInvoiceModal from "@/components/features/SecureInvoiceModal";
 
 export default function SalesPage() {
   const { shop } = useAuthStore();
@@ -18,6 +18,7 @@ export default function SalesPage() {
   
   const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Online" | "Credit" | "">("");
   const [customerName, setCustomerName] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -26,32 +27,61 @@ export default function SalesPage() {
     if (shop?.id) fetchProducts(shop.id);
   }, [shop, fetchProducts]);
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) && p.currentStock > 0);
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) && p.currentStock > 0
+  );
 
-  const addToCart = (product: any) => {
+const addToCart = (product: any) => {
+    // 1. Check stock validity OUTSIDE the state updater
+    const existingItem = cart.find(item => item.productId === product.id);
+    
+    if (existingItem && existingItem.quantity >= product.currentStock) {
+      toast.error("Insufficient stock limit reached!");
+      return; // Stop execution here
+    }
+
+    // 2. Perform a pure state update
     setCart(prev => {
-      const exists = prev.find(item => item.productId === product.id);
-      if (exists) {
-        if (exists.quantity >= product.currentStock) {
-          toast.error("Insufficient stock limit reached!");
-          return prev;
-        }
-        return prev.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      if (existingItem) {
+        return prev.map(item => 
+          item.productId === product.id 
+            ? { ...item, quantity: item.quantity + 1 } 
+            : item
+        );
       }
-      return [...prev, { productId: product.id, productName: product.name, unitPrice: product.sellingPrice, costPrice: product.costPrice, quantity: 1, maxStock: product.currentStock }];
+      return [...prev, { 
+        productId: product.id, 
+        productName: product.name, 
+        unitPrice: product.sellingPrice, 
+        costPrice: product.costPrice, 
+        quantity: 1, 
+        maxStock: product.currentStock 
+      }];
     });
   };
 
   const updateQuantity = (productId: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.productId === productId) {
-        const newQ = item.quantity + delta;
-        if (newQ > item.maxStock) { toast.error("Maximum available stock reached."); return item; }
-        if (newQ < 1) return item;
-        return { ...item, quantity: newQ };
-      }
-      return item;
-    }));
+    // 1. Check stock validity OUTSIDE the state updater
+    const itemToUpdate = cart.find(item => item.productId === productId);
+    
+    if (!itemToUpdate) return;
+
+    const newQuantity = itemToUpdate.quantity + delta;
+
+    if (newQuantity > itemToUpdate.maxStock) { 
+      toast.error("Maximum available stock reached."); 
+      return; 
+    }
+    if (newQuantity < 1) {
+      return; 
+    }
+
+    // 2. Perform a pure state update
+    setCart(prev => prev.map(item => 
+      item.productId === productId 
+        ? { ...item, quantity: newQuantity } 
+        : item
+    ));
   };
 
   const removeFromCart = (productId: string) => setCart(prev => prev.filter(item => item.productId !== productId));
@@ -61,10 +91,10 @@ export default function SalesPage() {
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handlePreview = () => {
-    if (cart.length === 0) return toast.error("Cannot generate bill: Cart is empty.");
-    if (!paymentMethod) return toast.error("A payment method must be selected.");
+    if (cart.length === 0) return toast.error("Cart is empty.");
+    if (!paymentMethod) return toast.error("Select a payment method.");
     if (paymentMethod === "Credit" && !customerName.trim()) {
-      return toast.error("Customer Name is mandatory for Credit transactions.");
+      return toast.error("Customer Name required for Credit.");
     }
     setIsPreviewOpen(true);
   };
@@ -85,134 +115,167 @@ export default function SalesPage() {
       totalAmount,
       profit: totalProfit,
       paymentMethod: paymentMethod as "Cash" | "Online" | "Credit",
-      customerName: customerName || undefined,
+      customerName: customerName || null,
+      customerAddress: customerAddress || null,
       date: new Date(),
     };
 
     try {
       await addSale(shop.id, saleData, cart);
-      toast.success("Transaction Secured & Recorded!");
-      
-      setCart([]);
-      setCustomerName("");
-      setPaymentMethod("");
-      setSearchQuery("");
-      setIsPreviewOpen(false);
+      toast.success("Transaction completed.");
+      setCart([]); setCustomerName(""); setCustomerAddress(""); setPaymentMethod(""); setSearchQuery(""); setIsPreviewOpen(false);
     } catch (error) {
-      toast.error("Failed to process transaction.");
+      toast.error("Transaction failed.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] lg:h-[calc(100vh-80px)] flex flex-col lg:flex-row overflow-hidden pb-16 lg:pb-0 w-full max-w-full">
+    <div className="h-[calc(100vh-64px)] lg:h-[calc(100vh-80px)] flex flex-col lg:flex-row bg-[#F7F9FC] font-sans overflow-hidden text-gray-900">
       
-      {/* LEFT COL: Products Panel */}
-      <div className="flex-1 flex flex-col bg-[#f4f7f9] lg:border-r border-gray-200 h-[50vh] lg:h-full min-w-0">
-        <div className="p-4 sm:p-6 bg-white border-b border-gray-100 shadow-sm z-10 shrink-0 flex justify-between items-center gap-4">
-          <div className="relative flex-1 max-w-2xl">
-            <input type="text" placeholder="Search by product name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full text-sm border border-gray-200 rounded-2xl pl-11 pr-4 py-3.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-baltic-blue outline-none font-bold text-gray-800 shadow-inner" autoFocus />
-            <Search size={18} className="absolute left-4 top-4 text-gray-400" />
+      {/* LEFT: Professional Product Grid */}
+      <div className="flex-1 flex flex-col min-w-0 border-r border-gray-200">
+        
+        {/* Search Header */}
+        <div className="p-5 bg-white border-b border-gray-200 shrink-0 flex items-center justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Search inventory..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-md text-sm focus:bg-white focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder-gray-400" 
+              autoFocus 
+            />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 content-start">
-          {filteredProducts.map(product => (
-            <button key={product.id} onClick={() => addToCart(product)} className="bg-white border border-gray-200 rounded-2xl p-4 text-left hover:border-baltic-blue hover:shadow-md active:scale-95 transition flex flex-col justify-between min-h-[100px] relative overflow-hidden">
-              <div>
-                <p className="text-sm font-black text-gray-900 leading-tight line-clamp-2">{product.name}</p>
-                <p className={`text-[10px] font-bold mt-1.5 uppercase tracking-widest ${product.currentStock <= 5 ? 'text-orange-500' : 'text-gray-400'}`}>
-                  Stock: {product.currentStock}
-                </p>
-              </div>
-              <p className="text-base font-black text-baltic-blue font-ibm mt-3">₹{product.sellingPrice}</p>
-            </button>
-          ))}
-          {filteredProducts.length === 0 && <div className="col-span-full py-10 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">No products available in inventory</div>}
+        {/* Product Grid */}
+        <div className="flex-1 overflow-y-auto p-5 bg-[#F7F9FC]">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+            {filteredProducts.map(product => (
+              <button 
+                key={product.id} 
+                onClick={() => addToCart(product)} 
+                className="group flex flex-col justify-between text-left bg-white border border-gray-200 rounded-lg p-4 h-[120px] hover:border-blue-600 hover:shadow-sm active:bg-gray-50 transition-all"
+              >
+                <div className="w-full">
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2 pr-2">{product.name}</p>
+                  </div>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${product.currentStock <= 5 ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+                    Stock: {product.currentStock}
+                  </span>
+                </div>
+                
+                <div className="w-full flex justify-between items-end mt-2">
+                  <p className="text-lg font-bold text-gray-900">₹{product.sellingPrice}</p>
+                  <div className="w-6 h-6 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center group-hover:bg-blue-600 group-hover:border-blue-600 group-hover:text-white transition-colors text-gray-400">
+                    <Plus size={14} />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Empty State */}
+          {filteredProducts.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center text-gray-400">
+              <PackageOpen size={40} strokeWidth={1.5} className="mb-3" />
+              <p className="text-sm font-medium">No products match your search.</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* RIGHT COL: Cart & Checkout Ledger */}
-      <div className="w-full lg:w-[400px] xl:w-[450px] shrink-0 bg-white flex flex-col h-[50vh] lg:h-full shadow-2xl z-20 relative">
+      {/* RIGHT: POS Checkout Register */}
+      <div className="w-full lg:w-[420px] bg-white flex flex-col h-[50vh] lg:h-full z-10 shrink-0">
         
         {/* Cart Header */}
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Active Cart ({totalItems} Items)</p>
+        <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-white shrink-0">
+          <h2 className="text-base font-bold text-gray-800">Current Order <span className="text-gray-400 font-normal ml-1">({totalItems})</span></h2>
           {cart.length > 0 && (
-            <button onClick={clearCart} className="text-[10px] font-bold text-red-500 hover:text-red-700 flex items-center gap-1 uppercase tracking-widest bg-red-50 px-2 py-1 rounded-md transition"><Eraser size={12}/> Clear</button>
+            <button onClick={clearCart} className="text-sm font-medium text-red-600 hover:text-red-700 transition-colors">
+              Clear
+            </button>
           )}
         </div>
 
-        {/* Cart Items List */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-5 bg-white">
+        {/* Cart Items */}
+        <div className="flex-1 overflow-y-auto p-2 bg-white">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center opacity-40">
-              <ShoppingCart size={48} className="mb-3 text-gray-300"/>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cart is empty</p>
+            <div className="h-full flex flex-col items-center justify-center text-gray-400">
+              <ShoppingCart size={40} strokeWidth={1.5} className="mb-3" />
+              <p className="text-sm">Scan or select items to begin</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <ul className="divide-y divide-gray-100">
               {cart.map(item => (
-                <div key={item.productId} className="bg-white border border-gray-100 rounded-xl p-3 flex justify-between items-center shadow-sm relative overflow-hidden group">
-                  <div className="absolute left-0 top-0 h-full w-1 bg-baltic-blue opacity-50"></div>
-                  <div className="flex-1 min-w-0 pr-3 pl-2">
-                    <h4 className="text-sm font-bold text-gray-900 truncate" title={item.productName}>{item.productName}</h4>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-xs font-black text-gray-500 font-ibm">₹{item.unitPrice}</p>
-                      <span className="text-gray-300 text-[10px]">•</span>
-                      <p className="text-[10px] font-bold text-gray-400">Total: ₹{(item.unitPrice * item.quantity).toLocaleString()}</p>
+                <li key={item.productId} className="p-3 hover:bg-gray-50 flex justify-between items-center group transition-colors">
+                  <div className="flex-1 min-w-0 pr-3">
+                    <h4 className="text-sm font-medium text-gray-900 truncate">{item.productName}</h4>
+                    <p className="text-xs text-gray-500 mt-0.5">₹{item.unitPrice} / unit</p>
+                  </div>
+                  
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <p className="text-sm font-bold text-gray-900">₹{(item.unitPrice * item.quantity).toLocaleString()}</p>
+                    <div className="flex items-center bg-white border border-gray-300 rounded overflow-hidden shadow-sm">
+                      <button onClick={() => updateQuantity(item.productId, -1)} className="px-2 py-1 text-gray-600 hover:bg-gray-100 transition-colors"><Minus size={14}/></button>
+                      <span className="w-8 text-center text-xs font-semibold text-gray-900 border-x border-gray-200 py-1">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(item.productId, 1)} className="px-2 py-1 text-gray-600 hover:bg-gray-100 transition-colors"><Plus size={14}/></button>
+                      <button onClick={() => removeFromCart(item.productId)} className="px-2 py-1 text-red-500 hover:bg-red-50 border-l border-gray-200 transition-colors"><Trash2 size={14}/></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1 border border-gray-200 shrink-0">
-                    <button onClick={() => updateQuantity(item.productId, -1)} className="p-1.5 text-gray-600 bg-white rounded shadow-sm hover:text-red-500 active:scale-90 transition"><Minus size={14} strokeWidth={3}/></button>
-                    <span className="w-6 text-center text-sm font-black font-ibm">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.productId, 1)} className="p-1.5 text-baltic-blue bg-white rounded shadow-sm hover:text-rich-cerulean active:scale-90 transition"><Plus size={14} strokeWidth={3}/></button>
-                  </div>
-                  <button onClick={() => removeFromCart(item.productId)} className="ml-2 p-2.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"><Trash2 size={16}/></button>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
 
-        {/* Action Bottom Area */}
-        <div className="bg-white border-t border-gray-100 p-5 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.03)] z-30">
+        {/* Checkout Panel */}
+        <div className="bg-gray-50 border-t border-gray-200 p-5 shrink-0">
           
-          <div className="mb-4">
-             <div className="relative">
-                <User size={16} className="absolute left-3.5 top-3.5 text-gray-400" />
-                <input type="text" placeholder={paymentMethod === 'Credit' ? "Customer Name (Mandatory for Credit)*" : "Customer Name (Optional)"} value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={`w-full border rounded-xl p-3 pl-10 text-sm font-bold outline-none transition-all shadow-sm ${paymentMethod === 'Credit' && !customerName ? 'border-orange-300 bg-orange-50 focus:ring-2 focus:ring-orange-500' : 'border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-baltic-blue'}`} />
-             </div>
-          </div>
-
-          <div className="mb-5">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex justify-between items-center">
-              Payment Method 
-              {!paymentMethod && <span className="text-red-500 normal-case tracking-normal text-[10px] flex items-center gap-1"><AlertTriangle size={12}/> Required</span>}
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button onClick={() => setPaymentMethod("Cash")} className={`py-3 rounded-xl text-sm font-black border transition-all ${paymentMethod === "Cash" ? 'bg-gray-900 border-gray-900 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 shadow-sm'}`}>Cash</button>
-              <button onClick={() => setPaymentMethod("Online")} className={`py-3 rounded-xl text-sm font-black border transition-all ${paymentMethod === "Online" ? 'bg-rich-cerulean border-rich-cerulean text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 shadow-sm'}`}>Online</button>
-              <button onClick={() => setPaymentMethod("Credit")} className={`py-3 rounded-xl text-sm font-black border transition-all ${paymentMethod === "Credit" ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 shadow-sm'}`}>Credit</button>
+          <div className="space-y-3 mb-5">
+            <div className="relative">
+              <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input type="text" placeholder={paymentMethod === 'Credit' ? "Customer Name (Required)*" : "Customer Name (Optional)"} value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={`w-full border rounded-md py-2.5 pl-10 pr-3 text-sm outline-none transition-all ${paymentMethod === 'Credit' && !customerName ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-gray-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600'}`} />
+            </div>
+            <div className="relative">
+              <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input type="text" placeholder="Customer Address (Optional)" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className="w-full border border-gray-300 rounded-md py-2.5 pl-10 pr-3 text-sm outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all" />
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4 pt-2 border-t border-gray-100">
-            <div className="shrink-0">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Grand Total</p>
-              <p className="text-3xl font-black text-gray-900 font-ibm leading-none">₹{totalAmount.toLocaleString()}</p>
+          <div className="mb-6">
+            <div className="grid grid-cols-3 gap-2">
+              {['Cash', 'Online', 'Credit'].map((method) => (
+                <button 
+                  key={method}
+                  onClick={() => setPaymentMethod(method as any)} 
+                  className={`py-2 rounded-md text-sm font-semibold border transition-all ${paymentMethod === method ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {method}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-gray-200 flex flex-col gap-4">
+            <div className="flex justify-between items-end">
+              <p className="text-sm font-semibold text-gray-600">Total Due</p>
+              <p className="text-3xl font-bold text-gray-900 tracking-tight">₹{totalAmount.toLocaleString()}</p>
             </div>
             
-            <button onClick={handlePreview} className="flex-1 bg-gradient-to-r from-baltic-blue to-[#087ca8] text-white font-black py-4 rounded-xl shadow-[0_8px_20px_rgba(5,102,141,0.3)] hover:-translate-y-0.5 transition active:scale-[0.98] flex items-center justify-center gap-2 text-sm">
-              <FileText size={18} /> Preview Bill
+            <button onClick={handlePreview} disabled={cart.length === 0} className="w-full bg-blue-600 disabled:bg-gray-300 text-white font-bold py-3.5 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-base">
+              <ShieldCheck size={20} /> Charge ₹{totalAmount.toLocaleString()}
             </button>
           </div>
-
         </div>
       </div>
 
-      <InvoicePreview 
+      <SecureInvoiceModal 
         isOpen={isPreviewOpen} 
         onClose={() => setIsPreviewOpen(false)} 
         onConfirm={confirmSale} 
@@ -220,6 +283,7 @@ export default function SalesPage() {
         total={totalAmount} 
         paymentMethod={paymentMethod} 
         customerName={customerName} 
+        customerAddress={customerAddress}
         shopDetails={shop} 
         isSubmitting={isSubmitting} 
       />

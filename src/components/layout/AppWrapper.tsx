@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { getShopDetails } from "@/lib/firebase/authService";
@@ -8,31 +8,49 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "./BottomNav";
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, ShieldCheck, UserSquare } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Settings, ShieldCheck, UserSquare } from "lucide-react";
 
 export default function AppWrapper({ children }: { children: React.ReactNode }) {
   const { setAuth, loading, user, shop } = useAuthStore();
   const pathname = usePathname();
   const router = useRouter();
-  const isPublicPage = pathname === "/login" || pathname === "/register";
+  const [isMounted, setIsMounted] = useState(false);
+
+  // 1. Improved Route Categories (Fixes the auto-redirect bug)
+  const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isLandingPage = pathname === "/";
+  const isPublicShopPage = pathname.startsWith("/shop/");
+  
+  // Treat Auth, Landing, and Public Shop as "Public Views" where the sidebar shouldn't show
+  const isPublicView = isAuthPage || isLandingPage || isPublicShopPage;
+  const isAppPage = !isPublicView;
 
   useEffect(() => {
+    setIsMounted(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const shopDetails = await getShopDetails(firebaseUser.uid, firebaseUser.email);
         setAuth(firebaseUser, shopDetails);
-        if (isPublicPage) {
+        
+        // Prevent logged-in users from seeing login/register
+        if (isAuthPage) {
           router.push(shopDetails?.role === "Admin" ? "/admin" : "/dashboard");
         }
       } else {
         setAuth(null, null);
-        if (!isPublicPage) router.push("/login");
+        
+        // Kick logged-out users OUT of private app pages, but let them stay on public pages
+        if (isAppPage) {
+          router.push("/login");
+        }
       }
     });
     return () => unsubscribe();
-  }, [setAuth, isPublicPage, router]);
+  }, [setAuth, isAuthPage, isAppPage, router]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-baltic-blue font-bebas text-2xl tracking-widest">LOADING QUREVO...</div>;
+  if (!isMounted || loading) {
+    return <div className="min-h-screen flex items-center justify-center font-bold text-baltic-blue font-bebas text-2xl tracking-widest">LOADING QUREVO...</div>;
+  }
 
   // DYNAMIC NAVIGATION: Super Admin gets a dedicated view
   let navItems = [];
@@ -46,7 +64,6 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { name: "Products", href: "/products", icon: Package },
       { name: "Sales & Billing", href: "/sales", icon: ShoppingCart },
-      { name: "Credits", href: "/credits", icon: Users },
       { name: "Customers", href: "/customers", icon: UserSquare },
       { name: "Settings", href: "/settings", icon: Settings },
     ];
@@ -61,8 +78,9 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc] font-sans">
+      
       {/* DESKTOP SIDEBAR */}
-      {user && !isPublicPage && (
+      {user && !isPublicView && (
         <aside className="hidden lg:flex flex-col w-[220px] bg-white border-r border-gray-200 fixed h-full z-40 shadow-sm">
           <div className="px-5 py-6 flex items-center justify-start border-b border-gray-100 h-[64px]">
             <img src="https://res.cloudinary.com/dpqsadqxj/image/upload/v1782143700/logo_pwered_by_qurevo_qpbgdp.png" alt="Qurevo" className="h-6 object-contain" />
@@ -97,10 +115,10 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
       )}
 
       {/* MAIN CONTENT AREA */}
-      <div className={`flex-1 flex flex-col transition-all w-full ${user && !isPublicPage ? "lg:ml-[220px]" : ""}`}>
+      <div className={`flex-1 flex flex-col transition-all w-full ${user && !isPublicView ? "lg:ml-[220px]" : ""}`}>
         
         {/* DESKTOP ONLY TOP HEADER */}
-        {user && !isPublicPage && (
+        {user && !isPublicView && (
           <header className="hidden lg:flex h-[64px] bg-white/80 backdrop-blur-md border-b border-gray-200 items-center justify-end px-8 sticky top-0 z-30">
             <div className="flex items-center gap-3 cursor-pointer group">
               <div className="flex flex-col items-end leading-none">
@@ -119,7 +137,7 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
           {children}
         </main>
 
-        {user && !isPublicPage && <div className="lg:hidden"><BottomNav /></div>}
+        {user && !isPublicView && <div className="lg:hidden"><BottomNav /></div>}
       </div>
     </div>
   );
