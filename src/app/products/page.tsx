@@ -42,24 +42,29 @@ export default function ProductsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete product permanently?")) return;
-    try { await deleteProduct(id); toast.success("Deleted."); setActiveActions(null); } catch (error) { toast.error("Delete failed."); }
+    try { 
+      await deleteProduct(id); 
+      toast.success("Deleted."); 
+      setActiveActions(null); 
+    } catch (error) { 
+      toast.error("Delete failed."); 
+    }
   };
 
   const adjustStock = async (id: string, current: number, change: number) => {
     const newStock = Math.max(0, current + change); 
-    try { await updateProduct(id, { currentStock: newStock }); } catch (error) { toast.error("Stock update failed"); }
+    try { 
+      await updateProduct(id, { currentStock: newStock }); 
+    } catch (error) { 
+      toast.error("Stock update failed"); 
+    }
   };
 
   return (
     <div className="pb-24 max-w-5xl mx-auto w-full px-3 sm:px-6 lg:px-8 font-sans bg-slate-50 min-h-screen">
       
-      {/* OPTIMIZED MOBILE HEADER
-        - Removed pt-6 gap 
-        - top-0 instead of top-[64px] (assumes parent layout handles its own scroll container cleanly)
-        - Backdrop blur for clean scrolling 
-      */}
+      {/* HEADER */}
       <div className="sticky top-0 z-30 pt-3 pb-3 sm:pt-6 sm:pb-4 bg-slate-50/90 backdrop-blur-md border-b border-slate-200/50 -mx-3 px-3 sm:mx-0 sm:px-0 mb-4">
-        
         <div className="flex items-center justify-between gap-4 mb-3">
           <div className="flex items-center gap-2">
             <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600 hidden sm:block">
@@ -71,13 +76,11 @@ export default function ProductsPage() {
             </div>
           </div>
           
-          {/* Desktop Add Button */}
           <button onClick={openAddModal} className="hidden sm:flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition active:scale-95">
             <Plus size={18} /> Add Product
           </button>
         </div>
 
-        {/* Search & Filters in a tight mobile row */}
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
           <div className="relative flex-1">
             <input 
@@ -90,7 +93,6 @@ export default function ProductsPage() {
             <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
           </div>
           
-          {/* Filter Chips - Horizontally scrollable on mobile */}
           <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 sm:pb-0 shrink-0">
             {["All", "Low Stock", "Out of Stock"].map(filter => (
               <button 
@@ -124,7 +126,6 @@ export default function ProductsPage() {
               <div key={product.id} className="relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all overflow-hidden flex flex-col group">
                 <div className="p-3 sm:p-4 flex items-center justify-between gap-3 flex-1">
                   
-                  {/* Left: Thumbnail & Details */}
                   <div className="flex items-center gap-3 sm:gap-4 overflow-hidden flex-1">
                     <div className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden relative">
                       {hasImage ? <img src={product.images![0]} alt={product.name} className="w-full h-full object-cover" /> : <Package size={20} className="text-slate-300"/>}
@@ -146,7 +147,6 @@ export default function ProductsPage() {
                     </div>
                   </div>
 
-                  {/* Right: Quick Actions */}
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="flex flex-col items-center bg-slate-50 rounded-lg p-0.5 border border-slate-200/60">
                       <button onClick={() => adjustStock(product.id, product.currentStock, 1)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors active:scale-90"><PlusCircle size={16}/></button>
@@ -158,7 +158,6 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                {/* Expanded Action Drawer */}
                 {activeActions === product.id && (
                   <div className="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-3 animate-in slide-in-from-top-2">
                     <button onClick={() => openEditModal(product)} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl shadow-sm hover:bg-slate-100 active:scale-95 transition-all"><Edit2 size={14}/> Edit</button>
@@ -171,7 +170,6 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* MOBILE FLOATING ACTION BUTTON (Hidden on Desktop) */}
       <button onClick={openAddModal} className="sm:hidden fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-600/30 hover:bg-indigo-700 active:scale-90 transition-all z-40">
         <Plus size={24} strokeWidth={2.5} />
       </button>
