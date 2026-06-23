@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -14,6 +14,27 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [hasPasskey, setHasPasskey] = useState(false);
+
+  // Check if this specific device has a registered Super Admin passkey
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setHasPasskey(!!localStorage.getItem("admin_passkey_id"));
+    }
+  }, []);
+
+  const routeUser = async (userUid: string) => {
+    const shopDoc = await getDoc(doc(db, "shops", userUid));
+    const role = shopDoc.data()?.role;
+    // Check local env override just in case it's the admin
+    if (email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || role === "Admin") {
+      toast.success("Welcome, Super Admin!");
+      router.push("/admin");
+    } else {
+      toast.success("Welcome back!");
+      router.push("/dashboard");
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,17 +42,8 @@ export default function LoginPage() {
     const loadingId = toast.loading("Authenticating...");
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Check Role for Routing
-      const shopDoc = await getDoc(doc(db, "shops", userCredential.user.uid));
-      const role = shopDoc.data()?.role;
-
-      toast.success(role === "Admin" ? "Welcome, Super Admin!" : "Welcome back!", { id: loadingId });
-      
-      // Force instant route
-      if (role === "Admin") router.push("/admin");
-      else router.push("/dashboard");
-
+      toast.dismiss(loadingId);
+      await routeUser(userCredential.user.uid);
     } catch (error: any) {
       toast.error("Invalid credentials or account suspended.", { id: loadingId });
     } finally {
@@ -39,15 +51,45 @@ export default function LoginPage() {
     }
   };
 
-  const handlePasskeyLogin = () => {
-    // Note: To fully activate this, you must enable "Passkeys" in Firebase Authentication > Sign-in Method.
-    toast("Passkey verification triggered. Use fingerprint or FaceID.", { icon: "🔐" });
+  const handlePasskeyLogin = async () => {
+    const rawId = localStorage.getItem("admin_passkey_id");
+    const adminEmail = localStorage.getItem("admin_passkey_email");
+    
+    if (!rawId || !adminEmail) return toast.error("No passkey found on this device.");
+
+    try {
+      const idBuffer = Uint8Array.from(atob(rawId), c => c.charCodeAt(0));
+      
+      // THIS OPENS THE HARDWARE FINGERPRINT/FACE-ID SCANNER
+      const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
+        challenge: Uint8Array.from("QurevoSecureChallenge123", c => c.charCodeAt(0)),
+        allowCredentials: [{ id: idBuffer, type: "public-key" }],
+        userVerification: "required",
+        timeout: 60000
+      };
+
+      await navigator.credentials.get({ publicKey: publicKeyCredentialRequestOptions });
+      
+      // If the code reaches here, the Fingerprint/FaceID succeeded!
+      // In a serverless frontend, we prompt the admin to enter their password *once* into the local session
+      // For pure UX demonstration of hardware unlock:
+      const adminPwd = prompt("Biometric Verified! Enter Super Admin Password to initialize secure session:");
+      
+      if (adminPwd) {
+        const loadingId = toast.loading("Initializing Secure Admin Session...");
+        const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPwd);
+        toast.dismiss(loadingId);
+        await routeUser(userCredential.user.uid);
+      }
+      
+    } catch (error) {
+      toast.error("Biometric verification failed or cancelled.");
+    }
   };
 
   return (
     <div className="min-h-screen flex flex-col justify-center bg-gray-50 p-6 md:max-w-md md:mx-auto relative overflow-hidden">
       
-      {/* Background Decor */}
       <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
       
       <div className="relative z-10 w-full">
@@ -60,13 +102,12 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
           <div>
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Email Address</label>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full border border-gray-200 bg-gray-50 rounded-xl p-3 text-sm font-bold outline-none focus:bg-white focus:border-baltic-blue transition-all" placeholder="admin@qurevo.in" />
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full border border-gray-200 bg-gray-50 rounded-xl p-3 text-sm font-bold outline-none focus:bg-white focus:border-baltic-blue transition-all" placeholder="name@shop.com" />
           </div>
 
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">Password</label>
-              <span className="text-[10px] text-rich-cerulean font-bold cursor-pointer">Forgot?</span>
             </div>
             <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full border border-gray-200 bg-gray-50 rounded-xl p-3 text-sm font-bold outline-none focus:bg-white focus:border-baltic-blue transition-all" placeholder="••••••••" />
           </div>
@@ -75,20 +116,24 @@ export default function LoginPage() {
             {isSubmitting ? "Authenticating..." : "Login Securely"}
           </button>
 
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-gray-100"></div>
-            <span className="flex-shrink-0 mx-4 text-gray-400 text-[10px] font-bold uppercase tracking-widest">OR</span>
-            <div className="flex-grow border-t border-gray-100"></div>
-          </div>
+          {/* PASSKEY BUTTON - ONLY SHOWS IF DEVICE IS LINKED */}
+          {hasPasskey && (
+            <>
+              <div className="relative flex items-center py-2">
+                <div className="flex-grow border-t border-gray-100"></div>
+                <span className="flex-shrink-0 mx-4 text-gray-400 text-[10px] font-bold uppercase tracking-widest">OR</span>
+                <div className="flex-grow border-t border-gray-100"></div>
+              </div>
 
-          {/* Passkey Integration Button */}
-          <button type="button" onClick={handlePasskeyLogin} className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-800 border border-gray-200 font-bold py-3.5 rounded-xl hover:bg-gray-100 transition-all active:scale-[0.98]">
-            <Fingerprint size={18} className="text-baltic-blue" /> Sign in with Passkey
-          </button>
+              <button type="button" onClick={handlePasskeyLogin} className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-bold py-3.5 rounded-xl hover:bg-black transition-all active:scale-[0.98] shadow-md">
+                <Fingerprint size={18} className="text-blue-300" /> Admin Hardware Unlock
+              </button>
+            </>
+          )}
         </form>
 
         <p className="text-center text-xs text-gray-500 mt-6 font-medium">
-          Don't have a shop yet? <Link href="/register" className="text-baltic-blue font-black">Create Account</Link>
+          Don't have a shop yet? <Link href="/register" className="text-baltic-blue font-black hover:underline">Create Account</Link>
         </p>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, IBM_Plex_Mono, Bebas_Neue } from "next/font/google";
+import { Inter, IBM_Plex_Mono, Bebas_Neue, Love_Ya_Like_A_Sister } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import AppWrapper from "@/components/layout/AppWrapper";
@@ -8,6 +8,7 @@ import OfflineBanner from "@/components/layout/OfflineBanner";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const ibmMono = IBM_Plex_Mono({ weight: ["400", "600", "700"], subsets: ["latin"], variable: "--font-ibm" });
 const bebasNeue = Bebas_Neue({ weight: "400", subsets: ["latin"], variable: "--font-bebas" });
+const loveYa = Love_Ya_Like_A_Sister({ weight: "400", subsets: ["latin"], variable: "--font-love-ya" });
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${ibmMono.variable} ${bebasNeue.variable} font-sans bg-gray-50 text-gray-900 text-sm`}>
+      <body className={`${inter.variable} ${ibmMono.variable} ${bebasNeue.variable} ${loveYa.variable} font-sans bg-[#f4f7f9] text-gray-900 text-sm`}>
         <OfflineBanner />
         <Toaster position="top-center" />
         <AppWrapper>

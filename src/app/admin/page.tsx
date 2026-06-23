@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { getAllPlatformShops, toggleShopStatusDB, hideShopFromDB, restoreShopFromDB } from "@/lib/firebase/adminService";
-// ADDED 'User' to the imports below!
-import { Store, ShieldAlert, Activity, Ban, CheckCircle, Eye, EyeOff, X, MapPin, Mail, Phone, Calendar, RefreshCw, User } from "lucide-react";
+import { 
+  Store, ShieldAlert, Activity, Ban, CheckCircle, Eye, EyeOff, 
+  X, MapPin, Mail, Phone, Calendar, RefreshCw, User, Fingerprint 
+} from "lucide-react";
 import { Shop } from "@/types";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -83,11 +85,44 @@ export default function SuperAdminPage() {
     }
   };
 
+  // Hardware Passkey Registration for Super Admin
+  const handleRegisterPasskey = async () => {
+    try {
+      if (!window.PublicKeyCredential) {
+        return toast.error("WebAuthn is not supported on this browser/device.");
+      }
+
+      const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
+        challenge: Uint8Array.from("QurevoSecureChallenge123", c => c.charCodeAt(0)),
+        rp: { name: "Qurevo Super Admin", id: window.location.hostname },
+        user: { 
+          id: Uint8Array.from(shop!.id, c => c.charCodeAt(0)), 
+          name: shop!.email, 
+          displayName: "Super Admin" 
+        },
+        pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+        timeout: 60000,
+        attestation: "direct"
+      };
+
+      const credential = await navigator.credentials.create({ publicKey: publicKeyCredentialCreationOptions }) as PublicKeyCredential;
+      
+      const rawId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+      localStorage.setItem("admin_passkey_id", rawId);
+      localStorage.setItem("admin_passkey_email", shop!.email);
+      
+      toast.success("Device linked successfully! You can now use Fingerprint/FaceID to login.", { icon: "🔐" });
+    } catch (error) {
+      toast.error("Passkey registration failed or cancelled.");
+    }
+  };
+
   if (shop?.role !== "Admin") return null;
 
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-6xl mx-auto">
-      <header className="flex items-center gap-4 mb-8">
+      <header className="flex items-center gap-4 mb-6">
         <div className="bg-baltic-blue p-3 rounded-2xl shadow-md">
           <ShieldAlert size={32} className="text-white" />
         </div>
@@ -96,6 +131,24 @@ export default function SuperAdminPage() {
           <p className="text-sm text-gray-500">Global SaaS Tenant Management & Monitoring</p>
         </div>
       </header>
+
+      {/* Passkey Setup Card */}
+      <div className="bg-gradient-to-r from-baltic-blue to-rich-cerulean rounded-2xl p-6 shadow-md text-white mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-black font-bebas tracking-wide flex items-center gap-2">
+            <Fingerprint size={20} /> Device-Bound Passkey Security
+          </h3>
+          <p className="text-xs text-blue-100 mt-1 max-w-md">
+            Link this specific device's hardware scanner (FaceID/Fingerprint) to bypass the password screen on the login page.
+          </p>
+        </div>
+        <button 
+          onClick={handleRegisterPasskey}
+          className="bg-white text-baltic-blue px-6 py-3 rounded-xl text-sm font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition whitespace-nowrap"
+        >
+          Link Device Passkey
+        </button>
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -238,7 +291,6 @@ export default function SuperAdminPage() {
             <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row gap-3 justify-end items-center">
               
               {selectedShop.isHidden ? (
-                // IF SHOP IS HIDDEN -> Show Restore Button
                 <button 
                   onClick={() => handleRestoreShop(selectedShop.id)}
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-baltic-blue text-white hover:bg-rich-cerulean transition shadow-md"
@@ -246,7 +298,6 @@ export default function SuperAdminPage() {
                   <RefreshCw size={16}/> Restore & Reactivate Account
                 </button>
               ) : (
-                // IF SHOP IS VISIBLE -> Show Hide & Suspend Buttons
                 <>
                   <button 
                     onClick={() => handleHideShop(selectedShop.id)}

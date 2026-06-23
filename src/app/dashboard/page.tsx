@@ -1,205 +1,216 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { 
-  IndianRupee, TrendingUp, Banknote, CreditCard, User, 
-  ShoppingCart, Package, Users, FileText, ChevronDown, Wallet, AlertTriangle 
+  Plus, Banknote, CreditCard, User, 
+  ShoppingCart, Package, Users, ChevronRight, FileText, CheckCircle
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSalesStore } from "@/store/useSalesStore";
 import { useProductStore } from "@/store/useProductStore";
 import EndDayReport from "@/components/features/EndDayReport";
 import Link from "next/link";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function Dashboard() {
   const { shop } = useAuthStore();
   const { sales, fetchSales } = useSalesStore();
   const { products, fetchProducts } = useProductStore();
-
-  const currentDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (shop?.id) {
       fetchSales(shop.id);
       fetchProducts(shop.id);
     }
   }, [shop, fetchSales, fetchProducts]);
 
-  const todayStats = useMemo(() => {
+  // Date & Time formatting
+  const todayDate = new Date();
+  const dateString = todayDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const hour = todayDate.getHours();
+  const greeting = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
+
+  // Filter Today's Sales
+  const todaysSales = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    const todaysSales = sales.filter(sale => {
+    return sales.filter(sale => {
       const saleDate = new Date(sale.date);
       saleDate.setHours(0, 0, 0, 0);
       return saleDate.getTime() === today.getTime();
     });
+  }, [sales]);
 
+  // Derived Daily Stats
+  const todayStats = useMemo(() => {
     return todaysSales.reduce((acc, sale) => {
       acc.totalSales += sale.totalAmount;
       acc.totalProfit += sale.profit;
       acc.transactions += 1;
-      
-      // MULTI-ITEM SUPPORT: Calculate sum of items in cart
       acc.itemsSold += sale.items ? sale.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
-
+      
       if (sale.paymentMethod === "Cash") acc.cashReceived += sale.totalAmount;
       if (sale.paymentMethod === "Online") acc.onlineReceived += sale.totalAmount;
       if (sale.paymentMethod === "Credit") acc.creditGiven += sale.totalAmount;
 
       return acc;
     }, { totalSales: 0, totalProfit: 0, cashReceived: 0, onlineReceived: 0, creditGiven: 0, transactions: 0, itemsSold: 0 });
-  }, [sales]);
+  }, [todaysSales]);
 
   const inHandProfit = todayStats.totalProfit - todayStats.creditGiven;
 
-  const chartData = useMemo(() => {
-    const last7Days: { dateObj: Date; name: string; sales: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      d.setHours(0,0,0,0);
-      last7Days.push({ dateObj: d, name: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), sales: 0 });
-    }
-
-    sales.forEach(sale => {
-      const saleDate = new Date(sale.date);
-      saleDate.setHours(0,0,0,0);
-      const dayMatch = last7Days.find(d => d.dateObj.getTime() === saleDate.getTime());
-      if (dayMatch) dayMatch.sales += sale.totalAmount;
-    });
-
-    return last7Days;
-  }, [sales]);
-
+  // Top Products (Today Only)
   const topProducts = useMemo(() => {
     const counts: Record<string, {name: string, sold: number}> = {};
-    sales.forEach(sale => {
-      // MULTI-ITEM SUPPORT: Iterate through cart items
+    todaysSales.forEach(sale => {
       sale.items?.forEach(item => {
         if (!counts[item.productId]) counts[item.productId] = { name: item.productName, sold: 0 };
         counts[item.productId].sold += item.quantity;
       });
     });
-    return Object.values(counts).sort((a, b) => b.sold - a.sold).slice(0, 5);
-  }, [sales]);
+    return Object.values(counts).sort((a, b) => b.sold - a.sold).slice(0, 4);
+  }, [todaysSales]);
+
+  // Helper for "Time Ago"
+  const timeAgo = (date: Date) => {
+    const minutes = Math.floor((new Date().getTime() - new Date(date).getTime()) / 60000);
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hr ago`;
+    return "Earlier today";
+  };
+
+  if (!mounted) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="pb-24 max-w-md mx-auto w-full px-4 sm:px-6">
       
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+      {/* 1. Header (Ultra-Compact) */}
+      <header className="flex justify-between items-center py-4 mb-2">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-gray-900 font-bebas tracking-wide">
-            Welcome back, {shop?.ownerName?.split(' ')[0] || "Owner"}! 👋
-          </h1>
-          <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">Here's your business summary for today.</p>
+          <h1 className="text-xl font-black text-gray-900 tracking-tight">{shop?.shopName || "My Store"}</h1>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">{dateString} • {greeting}</p>
         </div>
-        <div className="bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-bold text-gray-600 w-fit">
-          <span>📅 {currentDate}</span>
+        <div className="w-10 h-10 rounded-full bg-baltic-blue text-white flex items-center justify-center font-black text-sm shadow-sm overflow-hidden border border-blue-100">
+          {shop?.shopLogoUrl ? <img src={shop.shopLogoUrl} className="w-full h-full object-cover" alt="Logo"/> : (shop?.ownerName?.charAt(0) || "Q")}
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-        <StatCard icon={IndianRupee} title="Total Sales" amount={todayStats.totalSales} subtitle="Today's Revenue" accent="border-blue-500" iconBg="bg-blue-50" iconColor="text-blue-500" />
-        <StatCard icon={TrendingUp} title="Total Profit" amount={todayStats.totalProfit} subtitle="Today's Margin" accent="border-green-500" iconBg="bg-green-50" iconColor="text-green-500" />
-        <StatCard icon={Wallet} title="In-Hand Profit" amount={inHandProfit} subtitle="Profit - Credit" accent="border-emerald-500" iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-        <StatCard icon={Banknote} title="Cash Rcvd" amount={todayStats.cashReceived} subtitle="In Drawer" accent="border-orange-500" iconBg="bg-orange-50" iconColor="text-orange-500" />
-        <StatCard icon={CreditCard} title="Online Rcvd" amount={todayStats.onlineReceived} subtitle="In Bank" accent="border-indigo-500" iconBg="bg-indigo-50" iconColor="text-indigo-500" />
-        <StatCard icon={User} title="Credit Given" amount={todayStats.creditGiven} subtitle="Pending Dues" accent="border-red-500" iconBg="bg-red-50" iconColor="text-red-500" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 flex flex-col">
-          <h3 className="text-sm font-bold text-gray-900 mb-4 font-bebas tracking-wider">Quick Actions</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 flex-1">
-            <QuickAction href="/sales" icon={ShoppingCart} title="New Sale" colorClass="bg-blue-50 text-blue-600 border-blue-100" />
-            <QuickAction href="/products" icon={Package} title="Add Product" colorClass="bg-green-50 text-green-600 border-green-100" />
-            <QuickAction href="/credits" icon={Users} title="Credits" colorClass="bg-purple-50 text-purple-600 border-purple-100" />
-            <QuickAction href="/customers" icon={User} title="Customers" colorClass="bg-orange-50 text-orange-500 border-orange-100" />
-            <div className="col-span-2 sm:col-span-1 lg:col-span-1 flex items-stretch">
-              <EndDayReport shopName={shop?.shopName || "Store"} date={currentDate} stats={todayStats} />
-            </div>
-          </div>
+      {/* 2. Business Summary Ledger (Single Dense Card) */}
+      <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-gray-100 p-4 mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-sm font-bold text-gray-600">Today's Sales</span>
+          <span className="text-lg font-black text-gray-900 font-ibm">₹{todayStats.totalSales.toLocaleString()}</span>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 flex flex-col">
-          <h3 className="text-sm font-bold text-gray-900 mb-4 font-bebas tracking-wider">Today's Overview</h3>
-          <div className="flex-1 flex flex-col justify-between space-y-2">
-            <OverviewRow icon={Package} title="Items Sold" value={todayStats.itemsSold} color="text-blue-600 bg-blue-50" />
-            <OverviewRow icon={FileText} title="Transactions" value={todayStats.transactions} color="text-green-600 bg-green-50" />
-            <OverviewRow icon={AlertTriangle} title="Low Stock" value={products.filter(p=>p.currentStock<=10).length} color="text-orange-500 bg-orange-50" />
-            <OverviewRow icon={Users} title="Credit Bills" value={sales.filter(s=>s.paymentMethod==='Credit' && new Date(s.date).setHours(0,0,0,0) === new Date().setHours(0,0,0,0)).length} color="text-red-500 bg-red-50" />
-          </div>
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-sm font-bold text-gray-600">Gross Profit</span>
+          <span className="text-base font-black text-sage-green font-ibm">₹{todayStats.totalProfit.toLocaleString()}</span>
+        </div>
+        <div className="border-t border-gray-100 my-3 border-dashed"></div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm font-black text-baltic-blue">In-Hand Profit</span>
+          <span className="text-xl font-black text-baltic-blue font-ibm bg-blue-50 px-2 py-0.5 rounded-lg tracking-tight">₹{inHandProfit.toLocaleString()}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6">
-          <h3 className="text-sm font-bold text-gray-900 mb-4 font-bebas tracking-wider">Sales Trend (7 Days)</h3>
-          <div className="h-[220px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontFamily: 'var(--font-ibm)'}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontFamily: 'var(--font-ibm)'}} tickFormatter={(val) => `₹${val/1000}K`} />
-                <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', fontSize: '12px', fontFamily: 'var(--font-ibm)', fontWeight: 'bold' }} formatter={(value) => [`₹ ${Number(value).toLocaleString()}`, "Sales"]} />
-                <Line type="monotone" dataKey="sales" stroke="#05668d" strokeWidth={2.5} dot={{r: 3, strokeWidth: 2, fill: '#fff', stroke: '#05668d'}} activeDot={{r: 5}} />
-              </LineChart>
-            </ResponsiveContainer>
+      {/* 3. Micro KPIs */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+          <div className="absolute -right-2 -bottom-2 opacity-5 text-gray-900"><Banknote size={32}/></div>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cash Rcvd</span>
+          <span className="text-sm font-black text-gray-900 font-ibm">₹{todayStats.cashReceived}</span>
+        </div>
+        <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-1 relative overflow-hidden">
+          <div className="absolute -right-2 -bottom-2 opacity-5 text-rich-cerulean"><CreditCard size={32}/></div>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Online</span>
+          <span className="text-sm font-black text-rich-cerulean font-ibm">₹{todayStats.onlineReceived}</span>
+        </div>
+        <div className="bg-white p-3 rounded-xl border border-orange-100 shadow-sm flex flex-col gap-1 relative overflow-hidden bg-orange-50/30">
+          <div className="absolute -right-2 -bottom-2 opacity-5 text-orange-500"><User size={32}/></div>
+          <span className="text-[10px] font-bold text-orange-400 uppercase tracking-widest">Credit</span>
+          <span className="text-sm font-black text-orange-500 font-ibm">₹{todayStats.creditGiven}</span>
+        </div>
+      </div>
+
+      {/* 4. Quick Actions (2x2 Grid) */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <Link href="/sales" className="bg-white border border-gray-100 rounded-xl p-3.5 flex items-center gap-3 shadow-sm active:scale-95 transition">
+          <div className="bg-blue-50 text-baltic-blue p-2 rounded-lg"><ShoppingCart size={18} /></div>
+          <span className="text-xs font-bold text-gray-800">New Sale</span>
+        </Link>
+        <Link href="/products" className="bg-white border border-gray-100 rounded-xl p-3.5 flex items-center gap-3 shadow-sm active:scale-95 transition">
+          <div className="bg-green-50 text-sage-green p-2 rounded-lg"><Package size={18} /></div>
+          <span className="text-xs font-bold text-gray-800">Add Product</span>
+        </Link>
+        <Link href="/credits" className="bg-white border border-gray-100 rounded-xl p-3.5 flex items-center gap-3 shadow-sm active:scale-95 transition">
+          <div className="bg-orange-50 text-orange-500 p-2 rounded-lg"><Users size={18} /></div>
+          <span className="text-xs font-bold text-gray-800">Add Credit</span>
+        </Link>
+        <div className="bg-baltic-blue text-white rounded-xl shadow-sm active:scale-95 transition flex items-stretch">
+          {/* Inject End Day Report cleanly into the grid slot */}
+          <div className="w-full h-full [&>button]:h-full [&>button]:w-full [&>button]:bg-transparent [&>button]:shadow-none [&>button]:text-xs [&>button]:font-bold [&>button]:justify-start [&>button]:px-3.5 [&>button]:gap-3">
+             <EndDayReport shopName={shop?.shopName || "Store"} date={dateString} stats={todayStats} />
           </div>
         </div>
+      </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6">
-          <h3 className="text-sm font-bold text-gray-900 mb-4 font-bebas tracking-wider">Top Products</h3>
-          <div className="space-y-3">
-            {topProducts.length === 0 ? (
-               <div className="text-center text-gray-400 text-[11px] py-10 font-medium">No sales recorded yet</div>
-            ) : topProducts.map((prod, index) => (
-              <div key={index} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition border border-transparent hover:border-gray-100">
-                <div className="flex items-center gap-2.5 overflow-hidden">
-                  <div className="w-5 h-5 rounded bg-gray-100 text-gray-500 flex items-center justify-center text-[9px] font-black shrink-0">{index + 1}</div>
-                  <p className="text-[13px] font-bold text-gray-800 truncate">{prod.name}</p>
+      {/* 5. Recent Activity List */}
+      <div className="mb-6">
+        <h2 className="text-sm font-bold text-gray-900 mb-3 tracking-wide">Recent Transactions</h2>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] overflow-hidden divide-y divide-gray-50">
+          {todaysSales.length === 0 ? (
+            <div className="p-6 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">No sales recorded today.</div>
+          ) : (
+            todaysSales.slice(0, 5).map(sale => {
+               const itemName = sale.items?.length === 1 ? sale.items[0].productName : `${sale.items?.length || 0} Items`;
+               const qty = sale.items?.length === 1 ? `x ${sale.items[0].quantity}` : '';
+               return (
+                <div key={sale.id} className="p-3.5 flex justify-between items-center active:bg-gray-50 transition">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${sale.paymentMethod === 'Credit' ? 'bg-orange-50 text-orange-500' : 'bg-gray-100 text-gray-500'}`}>
+                      {sale.customerName ? sale.customerName.charAt(0).toUpperCase() : <FileText size={14}/>}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 leading-tight">{sale.customerName || itemName}</p>
+                      <p className="text-[10px] text-gray-500 font-medium">{sale.customerName ? itemName : ''} {qty} • {timeAgo(sale.date)}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-gray-900 font-ibm tracking-tight">₹{sale.totalAmount}</p>
+                    <p className={`text-[8px] font-bold uppercase tracking-widest mt-0.5 ${sale.paymentMethod === 'Credit' ? 'text-orange-500' : 'text-sage-green'}`}>{sale.paymentMethod}</p>
+                  </div>
                 </div>
-                <p className="text-xs font-black text-baltic-blue font-ibm shrink-0 pl-2">{prod.sold} <span className="text-[9px] font-medium text-gray-400">Sold</span></p>
-              </div>
-            ))}
-          </div>
+               )
+            })
+          )}
         </div>
       </div>
+
+      {/* 6. Top Products (Today) */}
+      <div className="mb-4">
+        <h2 className="text-sm font-bold text-gray-900 mb-3 tracking-wide">Top Products Today</h2>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] overflow-hidden divide-y divide-gray-50">
+          {topProducts.length === 0 ? (
+            <div className="p-6 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">No products sold yet.</div>
+          ) : (
+            topProducts.map((prod, idx) => (
+              <div key={idx} className="p-3.5 flex justify-between items-center">
+                <p className="text-sm font-bold text-gray-800 flex items-center gap-3">
+                  <span className="text-[10px] text-gray-400 font-black">{idx + 1}.</span> {prod.name}
+                </p>
+                <p className="text-xs font-black text-baltic-blue font-ibm bg-blue-50 px-2 py-1 rounded-md">{prod.sold} sold</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* FLOATING ACTION BUTTON */}
+      <Link href="/sales" className="fixed bottom-20 right-5 w-14 h-14 bg-baltic-blue text-white rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(5,102,141,0.4)] active:scale-90 transition-transform duration-200 z-40 lg:hidden">
+        <Plus size={24} strokeWidth={2.5} />
+      </Link>
     </div>
   );
 }
-
-const StatCard = ({ icon: Icon, title, amount, subtitle, accent, iconBg, iconColor }: any) => (
-  <div className={`bg-white rounded-xl p-3 sm:p-4 border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 group relative overflow-hidden flex flex-col justify-between`}>
-    <div className={`absolute left-0 top-0 h-full w-1 ${accent}`}></div>
-    <div className="flex justify-between items-start mb-2 pl-1">
-      <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate pr-1">{title}</p>
-      <div className={`p-1.5 rounded-lg ${iconBg} ${iconColor} group-hover:scale-110 transition-transform shrink-0`}><Icon size={14} /></div>
-    </div>
-    <div className="pl-1">
-      <h3 className={`text-lg sm:text-xl font-black font-ibm tracking-tight truncate ${amount < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-        {amount < 0 ? '-' : ''}₹{Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-      </h3>
-      <p className="text-[9px] font-medium text-gray-400 mt-0.5 truncate">{subtitle}</p>
-    </div>
-  </div>
-);
-
-const QuickAction = ({ href, icon: Icon, title, colorClass }: any) => (
-  <Link href={href} className={`flex flex-col items-center justify-center p-3 sm:p-4 border ${colorClass} rounded-xl hover:shadow-sm hover:brightness-95 transition-all group h-full w-full`}>
-    <div className="mb-2 group-hover:scale-110 transition-transform"><Icon size={22} /></div>
-    <p className="text-[11px] sm:text-xs font-bold text-center leading-tight truncate w-full px-1">{title}</p>
-  </Link>
-);
-
-const OverviewRow = ({ icon: Icon, title, value, color }: any) => (
-  <div className="flex items-center justify-between p-2.5 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
-    <div className="flex items-center gap-2.5 overflow-hidden">
-      <div className={`p-1.5 rounded-lg shrink-0 ${color}`}><Icon size={14} /></div>
-      <p className="text-xs sm:text-sm font-bold text-gray-700 truncate">{title}</p>
-    </div>
-    <p className="text-sm font-black text-gray-900 tabular-nums shrink-0 pl-2">{value}</p>
-  </div>
-);
