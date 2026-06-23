@@ -16,12 +16,12 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
 
-  // 1. Improved Route Categories (Fixes the auto-redirect bug)
+  // Route Categories
   const isAuthPage = pathname === "/login" || pathname === "/register";
   const isLandingPage = pathname === "/";
   const isPublicShopPage = pathname.startsWith("/shop/");
   
-  // Treat Auth, Landing, and Public Shop as "Public Views" where the sidebar shouldn't show
+  // Treat Auth, Landing, and Public Shop as "Public Views"
   const isPublicView = isAuthPage || isLandingPage || isPublicShopPage;
   const isAppPage = !isPublicView;
 
@@ -39,7 +39,7 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
       } else {
         setAuth(null, null);
         
-        // Kick logged-out users OUT of private app pages, but let them stay on public pages
+        // Kick logged-out users OUT of private app pages
         if (isAppPage) {
           router.push("/login");
         }
@@ -52,7 +52,7 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
     return <div className="min-h-screen flex items-center justify-center font-bold text-baltic-blue font-bebas text-2xl tracking-widest">LOADING QUREVO...</div>;
   }
 
-  // DYNAMIC NAVIGATION: Super Admin gets a dedicated view
+  // DYNAMIC NAVIGATION
   let navItems = [];
   if (shop?.role === "Admin") {
     navItems = [
@@ -132,8 +132,8 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
           </header>
         )}
 
-        {/* PAGE CONTENT */}
-        <main className="flex-1 p-3 sm:p-5 lg:p-8 pb-24 lg:pb-8 w-full max-w-[1600px] mx-auto overflow-x-hidden">
+        {/* PAGE CONTENT - CONDITIONAL PADDING APPLIED HERE */}
+        <main className={`flex-1 w-full overflow-x-hidden ${isPublicView ? "p-0" : "p-3 sm:p-5 lg:p-8 pb-24 lg:pb-8 max-w-[1600px] mx-auto"}`}>
           {children}
         </main>
 
