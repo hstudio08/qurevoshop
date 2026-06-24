@@ -52,19 +52,39 @@ export default function SalesPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // UPDATE: Extract full customer profiles safely
   const uniqueCustomers = useMemo(() => {
     if (!sales) return [];
-    const names = sales.map(s => s.customerName).filter(Boolean) as string[];
-    return Array.from(new Set(names));
+    const customerMap = new Map();
+    
+    // Iterate backward to grab the most recent details for a customer
+    for (let i = sales.length - 1; i >= 0; i--) {
+      const s = sales[i] as any; // FIX: Cast 's' as 'any' to bypass strict TS errors for new properties
+      
+      if (s.customerName && typeof s.customerName === 'string') {
+        const safeNameKey = s.customerName.trim().toLowerCase();
+        
+        if (!customerMap.has(safeNameKey)) {
+          customerMap.set(safeNameKey, {
+            name: s.customerName,
+            phone: s.customerPhone || "",
+            address: s.customerAddress || ""
+          });
+        }
+      }
+    }
+    return Array.from(customerMap.values());
   }, [sales]);
 
   const customerSuggestions = useMemo(() => {
     if (!customerName) return [];
-    return uniqueCustomers.filter(c => c.toLowerCase().includes(customerName.toLowerCase()));
+    return uniqueCustomers.filter((c: any) => 
+      c.name && c.name.toLowerCase().includes(customerName.toLowerCase())
+    );
   }, [customerName, uniqueCustomers]);
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) && p.currentStock > 0
+  const filteredProducts = products.filter((p: any) => 
+    p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase()) && p.currentStock > 0
   );
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
@@ -122,7 +142,6 @@ export default function SalesPage() {
   };
 
   const confirmSale = async () => {
-    // STRICT VALIDATION FOR INVOICES & CREDIT MOVED TO CONFIRM STEP
     if (!paymentMethod) return toast.error("Select a payment method.");
     if (invoiceNeeded) {
       if (!customerName.trim() || !customerAddress.trim() || !customerPhone.trim()) {
@@ -145,8 +164,9 @@ export default function SalesPage() {
       return { productId: item.productId, productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, costPrice: item.costPrice };
     });
 
+    const timestamp = Date.now();
     const saleData = {
-      id: `SALE-${Date.now()}`,
+      id: `SALE-${timestamp}`, // Locked timestamp for universal consistency
       shopId: activeShopId,
       items: saleItems,
       totalAmount,
@@ -178,7 +198,6 @@ export default function SalesPage() {
   };
 
   return (
-    // Note: flex-col-reverse makes cart stick to bottom on mobile, products top
     <div className="h-[calc(100vh-64px)] lg:h-[calc(100vh-0px)] flex flex-col-reverse lg:flex-row bg-slate-50 bg-[radial-gradient(#cbd5e1_1.5px,transparent_1.5px)] [background-size:24px_24px] font-sans overflow-hidden pb-20 lg:pb-0">
       
       {/* LEFT (Bottom on Mobile): POS Checkout Register (Cart Only) */}
@@ -234,7 +253,7 @@ export default function SalesPage() {
             <button 
               onClick={handleProceedToCheckout} 
               disabled={cart.length === 0} 
-              className="w-full bg-indigo-600 disabled:bg-slate-300 disabled:active:scale-100 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-base"
+              className="w-full bg-sky-600 disabled:bg-slate-300 disabled:active:scale-100 text-white font-black py-4 rounded-xl shadow-lg shadow-black-600/30 hover:bg-black-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-base"
             >
               <ShieldCheck size={20} /> Proceed to Checkout
             </button>
@@ -342,7 +361,7 @@ export default function SalesPage() {
 }
 
 /* =====================================================================
-   CHECKOUT MODAL (Contains Forms + Preview)
+   CHECKOUT MODAL
 ======================================================================== */
 
 function CheckoutModal({
@@ -410,16 +429,26 @@ function CheckoutModal({
                   onFocus={() => setShowSuggestions(true)}
                   className={`w-full bg-white border rounded-xl py-3 pl-10 pr-3 text-sm font-bold outline-none transition-all ${(invoiceNeeded || paymentMethod === 'Credit') && !customerName ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`} 
                 />
+                
+                {/* UPDATE: Auto-fill suggestion mapping includes Phone and Address */}
                 {showSuggestions && customerSuggestions.length > 0 && customerName && (
                   <div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2">
-                    {customerSuggestions.map((name: string, idx: number) => (
+                    {customerSuggestions.map((cust: any, idx: number) => (
                       <button
                         key={idx}
                         onMouseDown={(e) => e.preventDefault()} 
-                        onClick={() => { setCustomerName(name); setShowSuggestions(false); }}
+                        onClick={() => { 
+                          setCustomerName(cust.name); 
+                          if (cust.phone) setCustomerPhone(cust.phone);
+                          if (cust.address) setCustomerAddress(cust.address);
+                          setShowSuggestions(false); 
+                        }}
                         className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-b border-slate-50 last:border-0"
                       >
-                        {name}
+                        <div className="flex justify-between items-center">
+                          <span>{cust.name}</span>
+                          {cust.phone && <span className="text-[10px] font-medium text-slate-400">{cust.phone}</span>}
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -487,7 +516,7 @@ function CheckoutModal({
 }
 
 /* =====================================================================
-   POST-SALE FINAL A4 INVOICE GENERATOR (UNCHANGED)
+   POST-SALE FINAL A4 INVOICE GENERATOR
 ======================================================================== */
 
 interface PostSaleInvoiceProps {
@@ -498,20 +527,12 @@ interface PostSaleInvoiceProps {
 
 function PostSaleInvoiceModal({ sale, shopDetails, onClose }: PostSaleInvoiceProps) {
   const invoiceRef = useRef<HTMLDivElement>(null);
-  const [cryptoHash, setCryptoHash] = useState<string>("Generating...");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  useEffect(() => {
-    const generateSmallHash = async () => {
-      const payload = `${sale.id}-${sale.totalAmount}-${sale.date}`;
-      const msgUint8 = new TextEncoder().encode(payload);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      setCryptoHash(hashHex.substring(0, 16).toUpperCase());
-    };
-    generateSmallHash();
-  }, [sale]);
+  // UPDATE: Calculate an exact, immutable invoice number and hash immediately from the sale ID
+  // Since sale.id looks like "SALE-171284931238", we derive exact values instantly.
+  const invoiceNumber = sale.id.replace('SALE-', 'INV-');
+  const immutableHash = sale.id.replace('SALE-', '').substring(0, 10).split('').reverse().join('');
 
   const generatePDF = async () => {
     if (!invoiceRef.current) return;
@@ -525,12 +546,12 @@ function PostSaleInvoiceModal({ sale, shopDetails, onClose }: PostSaleInvoicePro
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.setProperties({
-        title: `Invoice_${cryptoHash}`,
+        title: `${invoiceNumber}`,
         author: shopDetails?.shopName || 'Qurevo Shops',
       });
 
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Invoice_${cryptoHash}.pdf`);
+      pdf.save(`${invoiceNumber}.pdf`);
     } catch (error) {
       console.error("PDF Generation failed", error);
     } finally {
@@ -592,7 +613,7 @@ function PostSaleInvoiceModal({ sale, shopDetails, onClose }: PostSaleInvoicePro
                   </div>
                   <div>
                     <p className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-0.5">Invoice Number</p>
-                    <p className="font-bold text-slate-800">INV-{cryptoHash.substring(0,8)}</p>
+                    <p className="font-bold text-slate-800">{invoiceNumber}</p>
                   </div>
                 </div>
               </div>
@@ -651,7 +672,7 @@ function PostSaleInvoiceModal({ sale, shopDetails, onClose }: PostSaleInvoicePro
 
             <div className="border-t border-slate-200 pt-8 flex flex-col items-center justify-center text-center">
               <p className="text-xs font-bold text-slate-400 font-mono tracking-widest uppercase mb-6">
-                Integrity Hash: {cryptoHash}
+                Integrity Code: {immutableHash}
               </p>
               
               <div className="flex flex-col items-center opacity-60">

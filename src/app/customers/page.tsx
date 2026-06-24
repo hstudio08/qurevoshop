@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { Search, UserSquare, X, ShieldAlert, Download, FileText, CalendarClock } from "lucide-react";
+import { Search, UserSquare, X, ShieldAlert, Download, FileText, CalendarClock, Phone, MapPin } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSalesStore } from "@/store/useSalesStore";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 export default function CustomersPage() {
-  // 1. Fetch user to build the fallback ID instantly
   const { shop, user } = useAuthStore();
   const { sales, fetchSales, isLoading } = useSalesStore();
   
@@ -19,28 +18,39 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<any>(null);
 
-  // 2. Mark component as safely mounted on the client
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // 3. Fetch sales as soon as the ID is ready
   useEffect(() => {
     if (activeShopId) fetchSales(activeShopId);
   }, [activeShopId, fetchSales]);
 
-  // 🔥 THE MASTER LOADING GATE 🔥
-  // Waits if unmounted, waiting for Auth, OR currently fetching.
   const isPageLoading = !mounted || !activeShopId || isLoading;
 
+  // UPGRADED: Safely extracts phone and address, ensuring the latest info is kept
   const customerList = useMemo(() => {
     const map: Record<string, any> = {};
-    sales.forEach(sale => {
+    sales.forEach((sale: any) => {
       if (!sale.customerName) return; 
       const name = sale.customerName.trim().toUpperCase();
       
-      if (!map[name]) map[name] = { name: sale.customerName, totalSpent: 0, totalVisits: 0, lastVisit: new Date(0), rawName: name };
+      if (!map[name]) {
+        map[name] = { 
+          name: sale.customerName, 
+          phone: sale.customerPhone || "",
+          address: sale.customerAddress || "",
+          totalSpent: 0, 
+          totalVisits: 0, 
+          lastVisit: new Date(0), 
+          rawName: name 
+        };
+      }
       
+      // Update with the most recent contact details if they exist in later sales
+      if (sale.customerPhone) map[name].phone = sale.customerPhone;
+      if (sale.customerAddress) map[name].address = sale.customerAddress;
+
       map[name].totalSpent += sale.totalAmount;
       map[name].totalVisits += 1;
       const saleDate = new Date(sale.date);
@@ -54,20 +64,14 @@ export default function CustomersPage() {
   const customerHistory = useMemo(() => {
     if (!selectedCustomer) return [];
     return sales
-      .filter(s => s.customerName?.toUpperCase() === selectedCustomer.rawName)
+      .filter((s: any) => s.customerName?.toUpperCase() === selectedCustomer.rawName)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [sales, selectedCustomer]);
 
-  // ==========================================
-  // EARLY RETURN: FULL PAGE SKELETON
-  // ==========================================
   if (isPageLoading) {
     return <CustomersPageSkeleton />;
   }
 
-  // ==========================================
-  // THE ACTUAL RENDERED PAGE
-  // ==========================================
   return (
     <div className="flex flex-col min-h-screen font-sans bg-slate-50 p-4 sm:p-6 lg:p-8 animate-in fade-in duration-500">
       
@@ -104,7 +108,7 @@ export default function CustomersPage() {
                 style={{ animationFillMode: "both", animationDelay: `${i * 50}ms` }}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-lg shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-lg shadow-inner shrink-0">
                     {customer.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
@@ -115,7 +119,7 @@ export default function CustomersPage() {
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-6 text-right">
+                <div className="flex items-center gap-6 text-right shrink-0">
                   <div className="hidden sm:block">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visits</p>
                     <p className="text-base font-black text-slate-700">{customer.totalVisits}</p>
@@ -136,11 +140,18 @@ export default function CustomersPage() {
           <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
             
             <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-start shrink-0">
-              <div>
+              <div className="pr-4">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">{selectedCustomer.name}</h2>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">{selectedCustomer.totalVisits} Lifetime Transactions</p>
+                {/* UPGRADED: Displaying Customer Profile Data */}
+                {selectedCustomer.phone && (
+                  <p className="text-sm font-medium text-slate-600 mt-1 flex items-center gap-1.5"><Phone size={14} className="text-slate-400"/> {selectedCustomer.phone}</p>
+                )}
+                {selectedCustomer.address && (
+                  <p className="text-sm font-medium text-slate-600 mt-0.5 flex items-center gap-1.5 leading-snug"><MapPin size={14} className="text-slate-400 shrink-0"/> {selectedCustomer.address}</p>
+                )}
+                <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-3 bg-indigo-50 inline-block px-2 py-1 rounded-md">{selectedCustomer.totalVisits} Lifetime Transactions</p>
               </div>
-              <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white rounded-xl text-slate-400 hover:text-red-500 shadow-sm border border-slate-200 transition-all hover:scale-105 active:scale-95">
+              <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white rounded-xl text-slate-400 hover:text-red-500 shadow-sm border border-slate-200 transition-all hover:scale-105 active:scale-95 shrink-0">
                 <X size={20}/>
               </button>
             </div>
@@ -209,26 +220,19 @@ export default function CustomersPage() {
 function CustomersPageSkeleton() {
   return (
     <div className="flex flex-col min-h-screen font-sans bg-slate-50 p-4 sm:p-6 lg:p-8">
-      
-      {/* Skeleton Header */}
       <header className="mb-8">
         <div className="h-10 w-72 bg-blue-100/80 animate-pulse rounded-lg mb-3"></div>
         <div className="h-4 w-96 max-w-full bg-blue-50 animate-pulse rounded-md"></div>
       </header>
 
-      {/* Skeleton Container */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[80vh]">
-        
-        {/* Skeleton Search Bar */}
         <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50 shrink-0 relative">
            <div className="w-full h-12 bg-blue-50/50 animate-pulse rounded-2xl border border-blue-50/80"></div>
         </div>
 
-        {/* Skeleton List Items */}
         <div className="flex-1 overflow-hidden divide-y divide-blue-50/50">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="p-5 sm:p-6 flex items-center justify-between bg-white relative overflow-hidden">
-              
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50/50 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}></div>
                 <div className="space-y-2.5">
@@ -236,7 +240,6 @@ function CustomersPageSkeleton() {
                   <div className="h-2.5 w-20 bg-blue-50 animate-pulse rounded-full" style={{ animationDelay: `${i * 100 + 300}ms` }}></div>
                 </div>
               </div>
-              
               <div className="flex items-center gap-6 text-right">
                 <div className="hidden sm:block space-y-2.5">
                   <div className="h-2 w-10 bg-blue-50 animate-pulse rounded-full ml-auto" style={{ animationDelay: `${i * 100 + 100}ms` }}></div>
@@ -247,8 +250,6 @@ function CustomersPageSkeleton() {
                   <div className="h-5 w-24 bg-blue-100/80 animate-pulse rounded-full ml-auto" style={{ animationDelay: `${i * 100 + 400}ms` }}></div>
                 </div>
               </div>
-
-              {/* Sweeping Shimmer Highlight */}
               <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-blue-100/20 to-transparent pointer-events-none" style={{ animation: 'shimmer 2s infinite ease-in-out', animationDelay: `${i * 150}ms` }} />
             </div>
           ))}
@@ -261,7 +262,7 @@ function CustomersPageSkeleton() {
 
 
 /* =====================================================================
-   SECURE PAST INVOICE GENERATOR COMPONENT (PDF CRASH FIX & A4 DESIGN)
+   SECURE PAST INVOICE GENERATOR COMPONENT (UPGRADED SYNC)
 ======================================================================== */
 
 interface SecureInvoiceProps {
@@ -272,20 +273,13 @@ interface SecureInvoiceProps {
 
 function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoiceProps) {
   const invoiceRef = useRef<HTMLDivElement>(null);
-  const [cryptoHash, setCryptoHash] = useState<string>("Generating...");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  useEffect(() => {
-    const generateSmallHash = async () => {
-      const payload = `${sale.id}-${sale.totalAmount}-${sale.date}`;
-      const msgUint8 = new TextEncoder().encode(payload);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      setCryptoHash(hashHex.substring(0, 16).toUpperCase());
-    };
-    generateSmallHash();
-  }, [sale]);
+  // UPGRADED: Synchronous, universal derived values (Matches SalesPage perfectly)
+  // Fallback used just in case there are legacy sales without the ID format
+  const safeId = sale.id || `SALE-${new Date(sale.date).getTime()}`;
+  const invoiceNumber = safeId.replace('SALE-', 'INV-');
+  const immutableHash = safeId.replace('SALE-', '').substring(0, 10).split('').reverse().join('');
 
   const generatePDF = async () => {
     if (!invoiceRef.current) return;
@@ -299,12 +293,12 @@ function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoicePro
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.setProperties({
-        title: `Invoice_${cryptoHash}`,
+        title: `${invoiceNumber}`,
         author: shopDetails?.shopName || 'Qurevo Shops',
       });
 
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Invoice_${cryptoHash}.pdf`);
+      pdf.save(`${invoiceNumber}.pdf`);
     } catch (error) {
       console.error("PDF Generation failed", error);
     } finally {
@@ -332,7 +326,7 @@ function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoicePro
 
       <div className="flex-1 overflow-auto bg-slate-800/50 p-4 sm:p-8 flex justify-center items-start custom-scrollbar">
         
-        {/* 🔥 FIX: ALL TAILWIND COLORS REPLACED WITH RAW HEX STRINGS IN THIS PRINTABLE AREA 🔥 */}
+        {/* FIX: ALL TAILWIND COLORS REPLACED WITH RAW HEX STRINGS IN THIS PRINTABLE AREA */}
         <div ref={invoiceRef} className="w-[794px] min-h-[1123px] shrink-0 bg-[#ffffff] relative shadow-2xl flex flex-col">
           
           <div className="h-3 w-full bg-[#0f172a] shrink-0"></div>
@@ -367,7 +361,7 @@ function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoicePro
                   </div>
                   <div>
                     <p className="font-bold text-[#94a3b8] uppercase text-[10px] tracking-widest mb-0.5">Invoice Number</p>
-                    <p className="font-bold text-[#1e293b]">INV-{cryptoHash.substring(0,8)}</p>
+                    <p className="font-bold text-[#1e293b]">{invoiceNumber}</p>
                   </div>
                 </div>
               </div>
@@ -426,7 +420,7 @@ function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoicePro
 
             <div className="border-t border-[#e2e8f0] pt-8 flex flex-col items-center justify-center text-center">
               <p className="text-xs font-bold text-[#94a3b8] font-mono tracking-widest uppercase mb-6">
-                Integrity Hash: {cryptoHash}
+                Integrity Code: {immutableHash}
               </p>
               
               <div className="flex flex-col items-center opacity-60">
