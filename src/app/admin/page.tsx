@@ -127,8 +127,8 @@ export default function SuperAdminPage() {
           <ShieldAlert size={32} className="text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-black text-gray-900 font-bebas tracking-wide">QUREVO SUPER ADMIN</h1>
-          <p className="text-sm text-gray-500">Global SaaS Tenant Management & Monitoring</p>
+          <h1 className="text-2xl font-black text-gray-900 font-bebas tracking-wide">QUREVO  ADMIN</h1>
+          <p className="text-sm text-gray-500">Global SaaS Shop Management & Monitoring</p>
         </div>
       </header>
 
