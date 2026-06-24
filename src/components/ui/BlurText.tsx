@@ -1,15 +1,19 @@
 "use client";
 
-import { motion } from 'motion/react';
+import { motion, TargetAndTransition } from 'motion/react';
 import { useEffect, useRef, useState, useMemo } from 'react';
 
-const buildKeyframes = (from, steps) => {
+// Pure TS implementation
+const buildKeyframes = (
+  from: Record<string, any>,
+  steps: Record<string, any>[]
+): TargetAndTransition => {
   const keys = new Set([...Object.keys(from), ...steps.flatMap(s => Object.keys(s))]);
-  const keyframes = {};
+  const keyframes: Record<string, any[]> = {};
   keys.forEach(k => {
     keyframes[k] = [from[k], ...steps.map(s => s[k])];
   });
-  return keyframes;
+  return keyframes as TargetAndTransition;
 };
 
 export default function BlurText({
@@ -22,13 +26,13 @@ export default function BlurText({
   rootMargin = '0px',
   animationFrom,
   animationTo,
-  easing = (t) => t,
+  easing = (t: number) => t,
   onAnimationComplete,
   stepDuration = 0.35
-}) {
+}: any) {
   const elements = animateBy === 'words' ? text.split(' ') : text.split('');
   const [inView, setInView] = useState(false);
-  const ref = useRef(null);
+  const ref = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -36,7 +40,7 @@ export default function BlurText({
       ([entry]) => {
         if (entry.isIntersecting) {
           setInView(true);
-          observer.unobserve(ref.current);
+          observer.unobserve(ref.current!);
         }
       },
       { threshold, rootMargin }
@@ -45,18 +49,15 @@ export default function BlurText({
     return () => observer.disconnect();
   }, [threshold, rootMargin]);
 
-  const defaultFrom = useMemo(
-    () => direction === 'top' ? { filter: 'blur(10px)', opacity: 0, y: -50 } : { filter: 'blur(10px)', opacity: 0, y: 50 },
+  const defaultFrom = useMemo(() => 
+    direction === 'top' ? { filter: 'blur(10px)', opacity: 0, y: -50 } : { filter: 'blur(10px)', opacity: 0, y: 50 },
     [direction]
   );
 
-  const defaultTo = useMemo(
-    () => [
-      { filter: 'blur(5px)', opacity: 0.5, y: direction === 'top' ? 5 : -5 },
-      { filter: 'blur(0px)', opacity: 1, y: 0 }
-    ],
-    [direction]
-  );
+  const defaultTo = useMemo(() => [
+    { filter: 'blur(5px)', opacity: 0.5, y: direction === 'top' ? 5 : -5 },
+    { filter: 'blur(0px)', opacity: 1, y: 0 }
+  ], [direction]);
 
   const fromSnapshot = animationFrom ?? defaultFrom;
   const toSnapshots = animationTo ?? defaultTo;
@@ -66,23 +67,15 @@ export default function BlurText({
 
   return (
     <p ref={ref} className={className} style={{ display: 'flex', flexWrap: 'wrap' }}>
-      {elements.map((segment, index) => {
+      {elements.map((segment: string, index: number) => {
         const animateKeyframes = buildKeyframes(fromSnapshot, toSnapshots);
-        
-        const spanTransition = { 
-          duration: totalDuration, 
-          times, 
-          delay: (index * delay) / 1000, 
-          ease: easing 
-        };
-
         return (
           <motion.span
             className="inline-block will-change-[transform,filter,opacity]"
             key={index}
             initial={fromSnapshot}
             animate={inView ? animateKeyframes : fromSnapshot}
-            transition={spanTransition}
+            transition={{ duration: totalDuration, times, delay: (index * delay) / 1000, ease: easing }}
             onAnimationComplete={index === elements.length - 1 ? onAnimationComplete : undefined}
           >
             {segment === ' ' ? '\u00A0' : segment}
