@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-  ],
+, "src/components/ui/Skelton.jsx", "src/components/ui/ShinyText.jsx", "src/components/ui/BlurText.jsx"  ],
   "exclude": ["node_modules"]
 }

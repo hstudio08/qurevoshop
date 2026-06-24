@@ -11,19 +11,38 @@ interface ProductState {
   deleteProduct: (productId: string) => Promise<void>;
 }
 
-export const useProductStore = create<ProductState>((set) => ({
+export const useProductStore = create<ProductState>((set, get) => ({
   products: [],
   isLoading: false,
   fetchProducts: async (shopId) => {
-    set({ isLoading: true });
+    // DEBUG: Check what ID is being passed
+    console.log("🔵 [Zustand] fetchProducts Triggered for Shop ID:", shopId);
+    
+    if (!shopId) {
+      console.warn("🔴 [Zustand] fetchProducts aborted: shopId is undefined/null");
+      return; 
+    }
+
+    if (get().products.length === 0) {
+      set({ isLoading: true });
+    }
+    
     try {
       const data = await getShopProducts(shopId);
+      console.log("🟢 [Zustand] Firebase returned products:", data);
       set({ products: data, isLoading: false });
-    } catch (error) { set({ isLoading: false }); }
+    } catch (error) { 
+      console.error("🔴 [Zustand] Firebase Fetch Error:", error);
+      set({ isLoading: false }); 
+    }
   },
   addProduct: async (shopId, productData) => {
+    console.log("🔵 [Zustand] Adding new product optimistically...");
     const newProduct = await addProductToDB(shopId, productData);
-    set((state) => ({ products: [...state.products, newProduct] }));
+    set((state) => {
+      console.log("🟢 [Zustand] New product added to state:", newProduct);
+      return { products: [newProduct, ...state.products] };
+    });
   },
   updateProduct: async (productId, data) => {
     await updateProductInDB(productId, data);

@@ -20,13 +20,32 @@ export const useSalesStore = create<SalesState>((set) => ({
     try {
       const q = query(collection(db, "sales"), where("shopId", "==", shopId));
       const snapshot = await getDocs(q);
-      const salesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate() || new Date()
-      })) as Sale[];
       
+      const salesData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        
+        // --- THE FIX: Safely parse both Timestamps and ISO Strings ---
+        let parsedDate = new Date();
+        if (data.date) {
+          if (typeof data.date.toDate === 'function') {
+            // Handles old Firestore Timestamp records
+            parsedDate = data.date.toDate();
+          } else {
+            // Handles our new, crash-free ISO string records
+            parsedDate = new Date(data.date);
+          }
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          date: parsedDate
+        };
+      }) as Sale[];
+      
+      // Now .getTime() is 100% safe to use
       salesData.sort((a, b) => b.date.getTime() - a.date.getTime());
+      
       set({ sales: salesData });
     } catch (error) {
       console.error("Error fetching sales:", error);
@@ -56,8 +75,18 @@ export const useSalesStore = create<SalesState>((set) => ({
       // 3. Commit to database
       await batch.commit();
 
-      // 4. Update UI instantly
-      const newSale = { id: saleRef.id, ...saleData } as Sale;
+      // 4. Update UI instantly (Ensuring date is a JS Date object for local state)
+      let parsedDate = new Date();
+      if (saleData.date) {
+        parsedDate = new Date(saleData.date);
+      }
+
+      const newSale = { 
+        id: saleRef.id, 
+        ...saleData, 
+        date: parsedDate 
+      } as Sale;
+      
       set((state) => ({ sales: [newSale, ...state.sales] }));
 
       // 5. Refresh products in background so stock quantities update on screen

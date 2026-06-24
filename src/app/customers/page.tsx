@@ -8,18 +8,31 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 export default function CustomersPage() {
-  const { shop } = useAuthStore();
+  // 1. Fetch user to build the fallback ID instantly
+  const { shop, user } = useAuthStore();
   const { sales, fetchSales, isLoading } = useSalesStore();
   
+  const activeShopId = shop?.id || (shop as any)?.uid || user?.uid;
+  
+  const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<any>(null);
 
+  // 2. Mark component as safely mounted on the client
   useEffect(() => {
-    if (shop?.id) fetchSales(shop.id);
-  }, [shop, fetchSales]);
+    setMounted(true);
+  }, []);
 
-  // Group sales by customer
+  // 3. Fetch sales as soon as the ID is ready
+  useEffect(() => {
+    if (activeShopId) fetchSales(activeShopId);
+  }, [activeShopId, fetchSales]);
+
+  // 🔥 THE MASTER LOADING GATE 🔥
+  // Waits if unmounted, waiting for Auth, OR currently fetching.
+  const isPageLoading = !mounted || !activeShopId || isLoading;
+
   const customerList = useMemo(() => {
     const map: Record<string, any> = {};
     sales.forEach(sale => {
@@ -38,7 +51,6 @@ export default function CustomersPage() {
 
   const filteredCustomers = customerList.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // Customer specific history
   const customerHistory = useMemo(() => {
     if (!selectedCustomer) return [];
     return sales
@@ -46,19 +58,26 @@ export default function CustomersPage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [sales, selectedCustomer]);
 
+  // ==========================================
+  // EARLY RETURN: FULL PAGE SKELETON
+  // ==========================================
+  if (isPageLoading) {
+    return <CustomersPageSkeleton />;
+  }
+
+  // ==========================================
+  // THE ACTUAL RENDERED PAGE
+  // ==========================================
   return (
-    <div className="flex flex-col min-h-screen font-sans bg-slate-50 p-4 sm:p-6 lg:p-8">
+    <div className="flex flex-col min-h-screen font-sans bg-slate-50 p-4 sm:p-6 lg:p-8 animate-in fade-in duration-500">
       
-      {/* Header */}
       <header className="mb-8">
         <h1 className="text-3xl font-black text-slate-900 tracking-tight">Customer Directory</h1>
         <p className="text-sm font-medium text-slate-500 mt-1">Track lifetime value, history, and securely regenerate past invoices.</p>
       </header>
 
-      {/* Main Container */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[80vh]">
         
-        {/* Search Bar */}
         <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50 shrink-0 relative">
           <input 
             type="text" 
@@ -70,12 +89,9 @@ export default function CustomersPage() {
           <Search size={18} className="absolute left-8 top-7 text-slate-400" />
         </div>
 
-        {/* Customer List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
-          {isLoading ? (
-            <div className="p-12 text-center text-sm font-bold text-slate-400 uppercase tracking-widest animate-pulse">Syncing Database...</div>
-          ) : filteredCustomers.length === 0 ? (
-            <div className="p-20 flex flex-col items-center justify-center">
+          {filteredCustomers.length === 0 ? (
+            <div className="p-20 flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
               <UserSquare size={48} className="text-slate-300 mb-4 opacity-50" />
               <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No customers found</p>
             </div>
@@ -84,7 +100,8 @@ export default function CustomersPage() {
               <div 
                 key={i} 
                 onClick={() => setSelectedCustomer(customer)} 
-                className="p-5 sm:p-6 flex items-center justify-between cursor-pointer hover:bg-indigo-50/30 transition-colors group"
+                className="p-5 sm:p-6 flex items-center justify-between cursor-pointer hover:bg-indigo-50/30 transition-colors group animate-in fade-in slide-in-from-bottom-4"
+                style={{ animationFillMode: "both", animationDelay: `${i * 50}ms` }}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-lg shadow-inner">
@@ -114,12 +131,10 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* RIGHT DRAWER: Customer Purchase History */}
       {selectedCustomer && (
         <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex justify-end">
           <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
             
-            {/* Drawer Header */}
             <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-start shrink-0">
               <div>
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">{selectedCustomer.name}</h2>
@@ -130,12 +145,10 @@ export default function CustomersPage() {
               </button>
             </div>
 
-            {/* History List */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
               {customerHistory.map(sale => (
                 <div key={sale.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden hover:border-indigo-300 transition-colors">
                   
-                  {/* Top Bar: Timestamp */}
                   <div className="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date & Time</span>
@@ -148,7 +161,6 @@ export default function CustomersPage() {
                     </span>
                   </div>
                   
-                  {/* Items list */}
                   <div className="p-4 space-y-2">
                     {sale.items?.map((item: any, idx: number) => (
                       <div key={idx} className="flex justify-between items-center text-sm">
@@ -161,7 +173,6 @@ export default function CustomersPage() {
                     ))}
                   </div>
 
-                  {/* Footer Action */}
                   <div className="px-4 py-3 border-t border-slate-100 flex justify-between items-center bg-slate-50">
                     <span className="text-sm font-black text-emerald-600">Total: ₹{sale.totalAmount.toLocaleString()}</span>
                     
@@ -169,7 +180,7 @@ export default function CustomersPage() {
                       onClick={() => setSelectedSaleForInvoice(sale)}
                       className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
                     >
-                      <FileText size={14} /> Regenerate Bill
+                      <FileText size={14} /> View Invoice
                     </button>
                   </div>
 
@@ -180,7 +191,6 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Secure Past Invoice Modal */}
       {selectedSaleForInvoice && (
         <SecurePastInvoiceModal 
           sale={selectedSaleForInvoice}
@@ -193,14 +203,70 @@ export default function CustomersPage() {
   );
 }
 
+/* =====================================================================
+   FULL PAGE SKELETON LOADER
+======================================================================== */
+function CustomersPageSkeleton() {
+  return (
+    <div className="flex flex-col min-h-screen font-sans bg-slate-50 p-4 sm:p-6 lg:p-8">
+      
+      {/* Skeleton Header */}
+      <header className="mb-8">
+        <div className="h-10 w-72 bg-blue-100/80 animate-pulse rounded-lg mb-3"></div>
+        <div className="h-4 w-96 max-w-full bg-blue-50 animate-pulse rounded-md"></div>
+      </header>
+
+      {/* Skeleton Container */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[80vh]">
+        
+        {/* Skeleton Search Bar */}
+        <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50 shrink-0 relative">
+           <div className="w-full h-12 bg-blue-50/50 animate-pulse rounded-2xl border border-blue-50/80"></div>
+        </div>
+
+        {/* Skeleton List Items */}
+        <div className="flex-1 overflow-hidden divide-y divide-blue-50/50">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="p-5 sm:p-6 flex items-center justify-between bg-white relative overflow-hidden">
+              
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50/50 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}></div>
+                <div className="space-y-2.5">
+                  <div className="h-4 w-32 bg-blue-100/80 animate-pulse rounded-full" style={{ animationDelay: `${i * 100 + 150}ms` }}></div>
+                  <div className="h-2.5 w-20 bg-blue-50 animate-pulse rounded-full" style={{ animationDelay: `${i * 100 + 300}ms` }}></div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-6 text-right">
+                <div className="hidden sm:block space-y-2.5">
+                  <div className="h-2 w-10 bg-blue-50 animate-pulse rounded-full ml-auto" style={{ animationDelay: `${i * 100 + 100}ms` }}></div>
+                  <div className="h-4 w-6 bg-blue-100/80 animate-pulse rounded-full ml-auto" style={{ animationDelay: `${i * 100 + 200}ms` }}></div>
+                </div>
+                <div className="space-y-2.5">
+                  <div className="h-2 w-20 bg-blue-50 animate-pulse rounded-full ml-auto" style={{ animationDelay: `${i * 100 + 300}ms` }}></div>
+                  <div className="h-5 w-24 bg-blue-100/80 animate-pulse rounded-full ml-auto" style={{ animationDelay: `${i * 100 + 400}ms` }}></div>
+                </div>
+              </div>
+
+              {/* Sweeping Shimmer Highlight */}
+              <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-blue-100/20 to-transparent pointer-events-none" style={{ animation: 'shimmer 2s infinite ease-in-out', animationDelay: `${i * 150}ms` }} />
+            </div>
+          ))}
+          <style dangerouslySetInnerHTML={{__html: `@keyframes shimmer { 100% { transform: translateX(100%); } }`}} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 /* =====================================================================
-   SECURE PAST INVOICE GENERATOR COMPONENT 
+   SECURE PAST INVOICE GENERATOR COMPONENT (PDF CRASH FIX & A4 DESIGN)
 ======================================================================== */
 
 interface SecureInvoiceProps {
   sale: any;
-  shopDetails: any; // Automatically passed from useAuthStore().shop
+  shopDetails: any; 
   onClose: () => void;
 }
 
@@ -226,7 +292,7 @@ function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoicePro
     setIsGenerating(true);
     
     try {
-      const canvas = await html2canvas(invoiceRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(invoiceRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -234,8 +300,7 @@ function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoicePro
       
       pdf.setProperties({
         title: `Invoice_${cryptoHash}`,
-        author: shopDetails?.shopName || 'Qurevo POS',
-        keywords: `hash:${cryptoHash}, saleId:${sale.id}`
+        author: shopDetails?.shopName || 'Qurevo Shops',
       });
 
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
@@ -248,93 +313,133 @@ function SecurePastInvoiceModal({ sale, shopDetails, onClose }: SecureInvoicePro
   };
 
   const saleDateObj = new Date(sale.date);
-  const formattedDate = saleDateObj.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
-  const formattedTime = saleDateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  const formattedDate = saleDateObj.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 font-sans">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[95vh] overflow-hidden">
-        
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-          <div className="flex items-center gap-2 text-indigo-700 font-bold bg-indigo-100 px-4 py-2 rounded-xl text-xs uppercase tracking-widest">
-            <ShieldAlert size={16} /> Verified Past Record
-          </div>
-          <div className="flex gap-2">
-            <button onClick={generatePDF} disabled={isGenerating} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-md active:scale-95 disabled:opacity-50">
-              <Download size={16} /> {isGenerating ? "Securing PDF..." : "Download Un-editable PDF"}
-            </button>
-            <button onClick={onClose} className="p-2.5 text-slate-400 hover:bg-slate-200 rounded-xl transition-all"><X size={20}/></button>
-          </div>
+    <div className="fixed inset-0 z-[60] flex flex-col bg-slate-900/80 backdrop-blur-sm font-sans">
+      
+      <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900 shrink-0 shadow-lg z-10">
+        <div className="flex items-center gap-2 text-indigo-400 font-bold px-2 text-xs uppercase tracking-widest hidden sm:flex">
+          <ShieldAlert size={16} /> Verified Past Record
         </div>
+        <div className="flex gap-3 w-full sm:w-auto justify-end">
+          <button onClick={generatePDF} disabled={isGenerating} className="flex-1 sm:flex-none flex justify-center items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:opacity-50">
+            <Download size={16} /> {isGenerating ? "Securing PDF..." : "Download PDF"}
+          </button>
+          <button onClick={onClose} className="p-2.5 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 rounded-xl transition-all"><X size={20}/></button>
+        </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto bg-slate-200/50 p-4 sm:p-8 flex justify-center">
-          <div ref={invoiceRef} className="bg-white w-full max-w-2xl shadow-xl p-10 sm:p-14 relative" style={{ minHeight: '800px' }}>
+      <div className="flex-1 overflow-auto bg-slate-800/50 p-4 sm:p-8 flex justify-center items-start custom-scrollbar">
+        
+        {/* 🔥 FIX: ALL TAILWIND COLORS REPLACED WITH RAW HEX STRINGS IN THIS PRINTABLE AREA 🔥 */}
+        <div ref={invoiceRef} className="w-[794px] min-h-[1123px] shrink-0 bg-[#ffffff] relative shadow-2xl flex flex-col">
+          
+          <div className="h-3 w-full bg-[#0f172a] shrink-0"></div>
+          
+          <div className="p-16 flex-1 flex flex-col">
             
-            <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-r from-slate-900 via-indigo-600 to-slate-900"></div>
-            
-            {/* EXACT SHOP DETAILS MAPPING FOR PAST INVOICES */}
-            <div className="flex justify-between items-start mb-14 mt-4">
-              <div className="max-w-xs">
-                <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-1">
-                  {shopDetails?.shopName || shopDetails?.ownerName || 'My Store'}
+            <div className="flex justify-between items-start mb-12 border-b border-[#e2e8f0] pb-10">
+              <div className="max-w-[350px]">
+                <h1 className="text-3xl font-black text-[#0f172a] tracking-tight uppercase mb-3">
+                  {shopDetails?.shopName || 'Store Name'}
                 </h1>
-                {shopDetails?.shopAddress && (
-                  <p className="text-sm font-medium text-slate-600 leading-snug mb-1">{shopDetails.shopAddress}</p>
-                )}
-                {shopDetails?.mobileNumber && (
-                  <p className="text-sm font-bold text-slate-500">Tel: {shopDetails.mobileNumber}</p>
-                )}
-                {shopDetails?.businessCategory && (
-                  <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-2">{shopDetails.businessCategory}</p>
-                )}
+                
+                <div className="text-sm text-[#475569] space-y-1">
+                  <p className="font-bold text-[#1e293b]">{shopDetails?.ownerName}</p>
+                  {shopDetails?.shopAddress && <p>{shopDetails.shopAddress}</p>}
+                  {(shopDetails?.state || shopDetails?.pincode) && (
+                    <p>{shopDetails?.state} {shopDetails?.pincode}</p>
+                  )}
+                  {shopDetails?.mobileNumber && <p className="mt-2 text-[#334155]">P: {shopDetails.mobileNumber}</p>}
+                  {shopDetails?.email && <p className="text-[#334155]">E: {shopDetails.email}</p>}
+                </div>
               </div>
+
               <div className="text-right">
-                <p className="text-4xl font-light text-slate-200 uppercase tracking-widest mb-3">RECEIPT</p>
-                <p className="text-sm font-bold text-slate-900">{formattedDate}</p>
-                <p className="text-xs font-semibold text-slate-500">{formattedTime}</p>
+                <h2 className="text-4xl font-light text-[#cbd5e1] tracking-widest mb-6">
+                  {sale.invoiceGenerated ? "INVOICE" : "RECEIPT"}
+                </h2>
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <p className="font-bold text-[#94a3b8] uppercase text-[10px] tracking-widest mb-0.5">Invoice Date</p>
+                    <p className="font-bold text-[#1e293b]">{formattedDate}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-[#94a3b8] uppercase text-[10px] tracking-widest mb-0.5">Invoice Number</p>
+                    <p className="font-bold text-[#1e293b]">INV-{cryptoHash.substring(0,8)}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {sale.customerName && (
-              <div className="mb-10 bg-slate-50 p-5 border-l-4 border-indigo-600">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Billed To</p>
-                <p className="text-lg font-black text-slate-800 uppercase">{sale.customerName}</p>
-                <p className="text-sm font-medium text-slate-600 mt-2">Payment Mode: <span className="font-bold text-slate-900">{sale.paymentMethod}</span></p>
+            <div className="flex justify-between items-start mb-12">
+              <div>
+                <p className="text-[10px] font-bold text-[#6366f1] uppercase tracking-widest mb-2">Billed To</p>
+                <h3 className="text-lg font-bold text-[#0f172a]">{sale.customerName || "Walk-in Customer"}</h3>
+                {sale.customerPhone && <p className="text-sm text-[#64748b] mt-1">Ph: {sale.customerPhone}</p>}
+                {sale.customerAddress && <p className="text-sm text-[#64748b] mt-1">{sale.customerAddress}</p>}
               </div>
-            )}
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest mb-2">Payment Method</p>
+                <p className="text-sm font-bold text-[#1e293b] bg-[#f8fafc] px-3 py-1 rounded-md border border-[#e2e8f0] inline-block">
+                  {sale.paymentMethod}
+                </p>
+              </div>
+            </div>
 
-            <table className="w-full mb-10 text-sm">
+            <table className="w-full text-sm mb-12">
               <thead>
-                <tr className="border-b-2 border-slate-900">
-                  <th className="text-left py-3 font-bold text-slate-900 uppercase tracking-wider text-xs">Item Description</th>
-                  <th className="text-center py-3 font-bold text-slate-900 uppercase tracking-wider text-xs">Qty</th>
-                  <th className="text-right py-3 font-bold text-slate-900 uppercase tracking-wider text-xs">Price</th>
-                  <th className="text-right py-3 font-bold text-slate-900 uppercase tracking-wider text-xs">Total</th>
+                <tr className="border-b-2 border-[#0f172a]">
+                  <th className="text-left py-3 font-bold text-[#0f172a] uppercase tracking-wider text-xs">Description</th>
+                  <th className="text-center py-3 font-bold text-[#0f172a] uppercase tracking-wider text-xs">Qty</th>
+                  <th className="text-right py-3 font-bold text-[#0f172a] uppercase tracking-wider text-xs">Unit Price</th>
+                  <th className="text-right py-3 font-bold text-[#0f172a] uppercase tracking-wider text-xs">Total</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-[#f1f5f9]">
                 {sale.items?.map((item: any, i: number) => (
-                  <tr key={i} className="border-b border-slate-100">
-                    <td className="py-4 font-semibold text-slate-800">{item.productName}</td>
-                    <td className="py-4 text-center text-slate-600 font-bold">{item.quantity}</td>
-                    <td className="py-4 text-right text-slate-600">₹{item.unitPrice}</td>
-                    <td className="py-4 text-right font-black text-slate-900">₹{(item.unitPrice * item.quantity).toLocaleString()}</td>
+                  <tr key={i}>
+                    <td className="py-4 font-semibold text-[#1e293b]">{item.productName}</td>
+                    <td className="py-4 text-center text-[#475569] font-medium">{item.quantity}</td>
+                    <td className="py-4 text-right text-[#475569]">₹{item.unitPrice.toLocaleString()}</td>
+                    <td className="py-4 text-right font-bold text-[#0f172a]">₹{(item.unitPrice * item.quantity).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <div className="flex justify-end mb-24">
-              <div className="w-64 flex justify-between py-3 border-t-2 border-slate-900">
-                <span className="font-black text-slate-900 uppercase tracking-wider">Grand Total</span>
-                <span className="font-black text-xl text-indigo-600 tracking-tight">₹{sale.totalAmount.toLocaleString()}</span>
+            <div className="flex justify-end mb-16">
+              <div className="w-72">
+                <div className="flex justify-between py-2 text-sm text-[#475569] border-b border-[#f1f5f9] mb-2">
+                  <span>Subtotal</span>
+                  <span className="font-semibold text-[#1e293b]">₹{sale.totalAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between py-3">
+                  <span className="text-lg font-black text-[#0f172a] uppercase tracking-wider">Total Due</span>
+                  <span className="text-2xl font-black text-[#0f172a]">₹{sale.totalAmount.toLocaleString()}</span>
+                </div>
               </div>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 bg-slate-900 text-slate-400 p-6 flex flex-col items-center text-center">
-              <ShieldAlert size={20} className="text-indigo-400 mb-2" />
-              <p className="text-[11px] uppercase tracking-widest font-black text-slate-200 mb-1">Cryptographic Integrity Seal</p>
-              <p className="text-xs font-mono font-bold text-indigo-300 bg-slate-800 px-4 py-1.5 rounded-md tracking-widest border border-slate-700">HASH: {cryptoHash}</p>
+            <div className="flex-1"></div>
+
+            <div className="border-t border-[#e2e8f0] pt-8 flex flex-col items-center justify-center text-center">
+              <p className="text-xs font-bold text-[#94a3b8] font-mono tracking-widest uppercase mb-6">
+                Integrity Hash: {cryptoHash}
+              </p>
+              
+              <div className="flex flex-col items-center opacity-60">
+                <p className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest mb-2">Powered By</p>
+                <div className="flex items-center gap-2">
+                  <img 
+                    src="https://res.cloudinary.com/dpqsadqxj/image/upload/v1782143700/logo_pwered_by_qurevo_qpbgdp.png" 
+                    alt="Qurevo Logo" 
+                    className="h-5 object-contain grayscale"
+                  />
+                  <span className="text-sm font-black text-[#1e293b] tracking-tight">Qurevo Shops</span>
+                </div>
+              </div>
             </div>
 
           </div>

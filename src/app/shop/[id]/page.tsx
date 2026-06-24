@@ -186,13 +186,12 @@ export default function PublicShopPage() {
                     {product.name}
                   </h3>
                   
-                  <div className="pt-3 border-t border-slate-100 flex justify-between items-end mt-auto">
+                  <div className="pt-3 border-t border-sky-100 flex justify-between items-end mt-auto">
                     <div className="flex flex-col">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Price</span>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-0.5">Price</span>
                       <span className="text-sm sm:text-lg font-black text-slate-900 tracking-tight leading-none">₹{product.sellingPrice}</span>
                     </div>
-                    <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-blue-50 group-hover:text-[#0066FF] transition-colors shrink-0">
-                      <ArrowRight size={12} strokeWidth={3} />
+                    <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center text-white group-hover:bg-sky group-hover:text-[#0066FF] transition-colors shrink-0">
                     </div>
                   </div>
                 </div>

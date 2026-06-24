@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { getShopDetails } from "@/lib/firebase/authService";
@@ -11,10 +11,10 @@ import BottomNav from "./BottomNav";
 import { LayoutDashboard, Package, ShoppingCart, Settings, ShieldCheck, UserSquare } from "lucide-react";
 
 export default function AppWrapper({ children }: { children: React.ReactNode }) {
-  const { setAuth, loading, user, shop } = useAuthStore();
+  // Removed 'loading' and 'useState' as we now rely on component-level skeletons
+  const { setAuth, user, shop } = useAuthStore();
   const pathname = usePathname();
   const router = useRouter();
-  const [isMounted, setIsMounted] = useState(false);
 
   // Route Categories
   const isAuthPage = pathname === "/login" || pathname === "/register";
@@ -26,7 +26,6 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
   const isAppPage = !isPublicView;
 
   useEffect(() => {
-    setIsMounted(true);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const shopDetails = await getShopDetails(firebaseUser.uid, firebaseUser.email);
@@ -47,10 +46,6 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
     });
     return () => unsubscribe();
   }, [setAuth, isAuthPage, isAppPage, router]);
-
-  if (!isMounted || loading) {
-    return <div className="min-h-screen flex items-center justify-center font-bold text-baltic-blue font-bebas text-2xl tracking-widest">LOADING QUREVO...</div>;
-  }
 
   // DYNAMIC NAVIGATION
   let navItems = [];

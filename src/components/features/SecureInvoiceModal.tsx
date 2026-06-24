@@ -1,175 +1,102 @@
-"use client";
+import React from "react";
+import { X, CheckCircle2, Receipt, User, MapPin, CreditCard, Banknote, Store } from "lucide-react";
 
-import React, { useEffect, useState, useRef } from "react";
-import { X, Download, ShieldAlert, CheckCircle, Lock } from "lucide-react";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  cart: any[];
-  total: number;
-  paymentMethod: string;
-  customerName: string;
-  customerAddress: string;
-  shopDetails: any; // Passed from useAuthStore().shop
-  isSubmitting: boolean;
-}
-
-export default function SecureInvoiceModal({ isOpen, onClose, onConfirm, cart, total, paymentMethod, customerName, customerAddress, shopDetails, isSubmitting }: Props) {
-  const invoiceRef = useRef<HTMLDivElement>(null);
-  const [cryptoHash, setCryptoHash] = useState<string>("Generating...");
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      const generateHash = async () => {
-        const payload = JSON.stringify({
-          shop: shopDetails?.id,
-          total,
-          items: cart.length,
-          time: new Date().toISOString(),
-          customer: customerName
-        });
-        const msgUint8 = new TextEncoder().encode(payload);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        setCryptoHash(hashHex.substring(0, 16).toUpperCase()); // Clean 16-char hash
-      };
-      generateHash();
-    }
-  }, [isOpen, cart, total, customerName, shopDetails]);
-
-  const generatePDF = async () => {
-    if (!invoiceRef.current) return;
-    setIsGenerating(true);
-    
-    try {
-      const canvas = await html2canvas(invoiceRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.setProperties({
-        title: `Receipt_${cryptoHash}`,
-        author: shopDetails?.shopName || 'Qurevo POS',
-        keywords: `hash:${cryptoHash}`,
-        creator: 'Qurevo POS System'
-      });
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Invoice_${Date.now()}.pdf`);
-    } catch (error) {
-      console.error("PDF Gen failed", error);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
+export default function SecureInvoiceModal({
+  isOpen, onClose, onConfirm, cart, total, paymentMethod, customerName, customerAddress, shopDetails, isSubmitting
+}: any) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 font-sans">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[95vh] overflow-hidden">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200 overflow-hidden relative">
         
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-          <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 px-3 py-1.5 rounded-full text-xs">
-            <Lock size={14} /> Cryptographic Layer Active
-          </div>
-          <div className="flex gap-2">
-            <button onClick={generatePDF} disabled={isGenerating} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50">
-              <Download size={16} /> {isGenerating ? "Locking PDF..." : "Download Secure PDF"}
-            </button>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-all"><X size={20}/></button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto bg-slate-200/50 p-4 sm:p-8 flex justify-center">
-          <div ref={invoiceRef} className="bg-white w-full max-w-2xl shadow-xl p-10 sm:p-14 relative" style={{ minHeight: '800px' }}>
-            
-            <div className="absolute top-0 left-0 right-0 h-3 bg-gradient-to-r from-slate-900 via-indigo-600 to-slate-900"></div>
-            
-            {/* EXACT SHOP DETAILS MAPPING */}
-            <div className="flex justify-between items-start mb-12 mt-4">
-              <div className="max-w-xs">
-                {/* Fallback to ownerName if shopName isn't set yet */}
-                <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-1">
-                  {shopDetails?.shopName || shopDetails?.ownerName || 'My Store'}
-                </h1>
-                
-                {/* Uses exact properties from SettingsPage */}
-                {shopDetails?.shopAddress && (
-                  <p className="text-sm font-medium text-slate-600 leading-snug mb-1">{shopDetails.shopAddress}</p>
-                )}
-                {shopDetails?.mobileNumber && (
-                  <p className="text-sm font-bold text-slate-500">Tel: {shopDetails.mobileNumber}</p>
-                )}
-                {shopDetails?.businessCategory && (
-                  <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-2">{shopDetails.businessCategory}</p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-4xl font-light text-slate-200 uppercase tracking-widest mb-2">INVOICE</p>
-                <p className="text-sm font-bold text-slate-800">Date: {new Date().toLocaleDateString()}</p>
-                <p className="text-sm font-medium text-slate-500">Time: {new Date().toLocaleTimeString()}</p>
-              </div>
-            </div>
-
-            {(customerName || customerAddress) && (
-              <div className="mb-10 bg-slate-50 p-5 border-l-4 border-indigo-600">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Billed To</p>
-                {customerName && <p className="text-lg font-bold text-slate-800">{customerName}</p>}
-                {customerAddress && <p className="text-sm font-medium text-slate-600 mt-1">{customerAddress}</p>}
-                <p className="text-sm font-medium text-slate-600 mt-2">Payment Method: <span className="font-bold text-slate-900">{paymentMethod}</span></p>
-              </div>
-            )}
-
-            <table className="w-full mb-10 text-sm">
-              <thead>
-                <tr className="border-b-2 border-slate-900">
-                  <th className="text-left py-3 font-bold text-slate-900">Item Description</th>
-                  <th className="text-center py-3 font-bold text-slate-900">Qty</th>
-                  <th className="text-right py-3 font-bold text-slate-900">Price</th>
-                  <th className="text-right py-3 font-bold text-slate-900">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cart.map((item, i) => (
-                  <tr key={i} className="border-b border-slate-100">
-                    <td className="py-4 font-medium text-slate-800">{item.productName}</td>
-                    <td className="py-4 text-center text-slate-600">{item.quantity}</td>
-                    <td className="py-4 text-right text-slate-600">₹{item.unitPrice}</td>
-                    <td className="py-4 text-right font-bold text-slate-800">₹{(item.unitPrice * item.quantity).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="flex justify-end mb-16">
-              <div className="w-64 flex justify-between py-2 border-t-2 border-slate-900 mt-2">
-                <span className="font-bold text-slate-900">Total Amount</span>
-                <span className="font-black text-xl text-indigo-600 tracking-tight">₹{total.toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div className="absolute bottom-0 left-0 right-0 p-8 bg-slate-900 text-slate-400 flex flex-col items-center justify-center text-center">
-              <ShieldAlert size={24} className="text-indigo-400 mb-3" />
-              <p className="text-xs uppercase tracking-widest font-bold text-slate-300 mb-1">Cryptographic Integrity Seal</p>
-              <p className="text-[10px] font-mono break-all px-8 opacity-70 bg-slate-800 py-1 rounded">SHA256: {cryptoHash}</p>
-            </div>
-
-          </div>
-        </div>
-
-        <div className="p-5 border-t border-slate-100 bg-white flex justify-end gap-4 shrink-0">
-          <button onClick={onClose} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all">Cancel</button>
-          <button onClick={onConfirm} disabled={isSubmitting} className="px-8 py-3 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-xl transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50">
-            {isSubmitting ? "Processing..." : <><CheckCircle size={18} /> Confirm Transaction</>}
+        {/* Header */}
+        <div className="flex justify-between items-center p-3 border-b border-slate-100 shrink-0 bg-slate-50">
+          <h2 className="text-xs font-black text-slate-800 flex items-center gap-2 uppercase tracking-widest">
+            <Receipt size={14} /> Order Preview
+          </h2>
+          <button onClick={onClose} disabled={isSubmitting} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition-colors">
+            <X size={16} />
           </button>
+        </div>
+
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          
+          {/* Shopkeeper Details (Billed From) */}
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Billed From</p>
+            <p className="text-xs font-black text-slate-800 flex items-center gap-1.5"><Store size={12} className="text-slate-400"/> {shopDetails?.shopName || "My Store"}</p>
+            <p className="text-[11px] font-semibold text-slate-700">{shopDetails?.ownerName || "Shopkeeper"}</p>
+            <p className="text-[10px] font-medium text-slate-500 leading-snug">{shopDetails?.shopAddress}</p>
+            {(shopDetails?.state || shopDetails?.pincode) && (
+              <p className="text-[10px] font-medium text-slate-500">{shopDetails?.state} {shopDetails?.pincode}</p>
+            )}
+          </div>
+
+          {/* Customer Info (Billed To) */}
+          {(customerName || customerAddress) && (
+            <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 space-y-1.5">
+              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Billed To</p>
+              {customerName && <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5"><User size={12} className="text-indigo-400"/> {customerName}</p>}
+              {customerAddress && <p className="text-[11px] font-medium text-slate-600 flex items-center gap-1.5"><MapPin size={12} className="text-indigo-400"/> {customerAddress}</p>}
+            </div>
+          )}
+
+          {/* Items List */}
+          <div>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Items ({cart.length})</p>
+            <div className="space-y-1.5 mb-4">
+              {cart.map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between items-start text-xs font-medium text-slate-700">
+                  <span className="flex-1 pr-2 leading-tight">
+                    <span className="font-bold text-slate-900 mr-1">{item.quantity}x</span> 
+                    {item.productName}
+                  </span>
+                  <span className="font-bold text-slate-900 shrink-0">₹{(item.unitPrice * item.quantity).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            
+            {/* Qurevo Branding */}
+            <div className="mt-6 flex justify-center opacity-40">
+              <img 
+                src="https://res.cloudinary.com/dpqsadqxj/image/upload/v1782143700/logo_pwered_by_qurevo_qpbgdp.png" 
+                alt="Qurevo" 
+                className="h-3.5 object-contain grayscale"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky Footer */}
+        <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              {paymentMethod === "Cash" && <Banknote size={14} className="text-emerald-500" />}
+              {paymentMethod === "Online" && <CreditCard size={14} className="text-blue-500" />}
+              {paymentMethod === "Credit" && <User size={14} className="text-orange-500" />}
+              {paymentMethod}
+            </div>
+            <span className="text-xl font-black text-emerald-600 tracking-tighter">₹{total.toLocaleString()}</span>
+          </div>
+          
+          <div className="flex gap-2">
+            <button 
+              onClick={onClose} 
+              disabled={isSubmitting}
+              className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 text-[11px] font-bold rounded-xl hover:bg-slate-100 transition active:scale-95 disabled:opacity-50"
+            >
+              Edit
+            </button>
+            <button 
+              onClick={onConfirm} 
+              disabled={isSubmitting}
+              className="flex-[2] py-2.5 bg-indigo-600 text-white text-[11px] font-bold rounded-xl shadow-md shadow-indigo-600/20 hover:bg-indigo-700 transition active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {isSubmitting ? "Processing..." : <><CheckCircle2 size={14} /> Confirm Sale</>}
+            </button>
+          </div>
         </div>
 
       </div>
