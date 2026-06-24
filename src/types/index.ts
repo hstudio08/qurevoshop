@@ -1,4 +1,3 @@
-// Add batchNo and expiryDate to Product
 export interface Product {
   id: string;
   shopId: string;
@@ -8,9 +7,9 @@ export interface Product {
   currentStock: number;
   batchNo?: string;
   expiryDate?: string;
-  images?: string[]; // <-- NEW: Array of ImgBB URLs (Max 2)
-  createdAt: Date;
-  updatedAt: Date;
+  images?: string[]; // Array of ImgBB URLs (Max 2)
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 export interface SaleItem {
@@ -30,26 +29,26 @@ export interface Sale {
   customerName?: string;
   customerAddress?: string;
   paymentMethod: "Cash" | "Online" | "Credit";
-  date: Date;
+  date: string | Date;
   invoiceNumber?: string;
 }
 
 export interface Shop {
   id: string;
-  ownerUid: string;
+  ownerUid?: string;
   ownerName: string;
   email: string;
-  mobileNumber: string;
-  personalAddress: string;
+  mobileNumber?: string;
+  personalAddress?: string;
   shopName: string;
-  shopAddress: string;
-  state: string;
-  country: string;
-  pincode: string;
-  businessCategory: string;
-  role: "ShopOwner" | "Admin";
-  isActive: boolean;
+  shopAddress?: string;
+  state?: string;
+  country?: string;
+  pincode?: string;
+  businessCategory?: string;
+  role: "Shopkeeper" | "Admin" | "ShopOwner";
+  isActive?: boolean;
   isHidden?: boolean;
-  createdAt: Date;
+  createdAt?: string | Date;
   shopLogoUrl?: string;
 }

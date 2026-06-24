@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { 
-  Plus, Banknote, CreditCard, User, 
-  ShoppingCart, Package, Users, FileText, Store, TrendingUp, X, Download
+  ShoppingCart, Package, Users, FileText, Store, TrendingUp, X, Download, ArrowRight
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSalesStore } from "@/store/useSalesStore";
@@ -12,6 +11,40 @@ import Link from "next/link";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
+import BlurText from "@/components/ui/BlurText";
+import ShinyText from "@/components/ui/ShinyText";
+
+interface SaleItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice?: number;
+  costPrice?: number;
+}
+
+interface SaleRecord {
+  id: string;
+  date: string | Date;
+  totalAmount: number;
+  profit: number;
+  paymentMethod: string;
+  customerName?: string;
+  items?: SaleItem[];
+}
+
+interface AccStats {
+  totalSales: number;
+  totalProfit: number;
+  cashReceived: number;
+  onlineReceived: number;
+  creditGiven: number;
+  transactions: number;
+}
+
+interface ProductCount {
+  name: string;
+  sold: number;
+}
 
 export default function Dashboard() {
   const { shop } = useAuthStore();
@@ -38,7 +71,7 @@ export default function Dashboard() {
   const todaysSales = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return sales.filter(sale => {
+    return sales.filter((sale: SaleRecord) => {
       const saleDate = new Date(sale.date);
       saleDate.setHours(0, 0, 0, 0);
       return saleDate.getTime() === today.getTime();
@@ -46,14 +79,14 @@ export default function Dashboard() {
   }, [sales]);
 
   const todayStats = useMemo(() => {
-    return todaysSales.reduce((acc, sale) => {
+    return todaysSales.reduce((acc: AccStats, sale: SaleRecord) => {
       acc.totalSales += sale.totalAmount || 0;
       acc.totalProfit += sale.profit || 0;
       acc.transactions += 1;
       
-      if (sale.paymentMethod === "Cash") acc.cashReceived += sale.totalAmount;
-      if (sale.paymentMethod === "Online") acc.onlineReceived += sale.totalAmount;
-      if (sale.paymentMethod === "Credit") acc.creditGiven += sale.totalAmount;
+      if (sale.paymentMethod === "Cash") acc.cashReceived += (sale.totalAmount || 0);
+      if (sale.paymentMethod === "Online") acc.onlineReceived += (sale.totalAmount || 0);
+      if (sale.paymentMethod === "Credit") acc.creditGiven += (sale.totalAmount || 0);
 
       return acc;
     }, { totalSales: 0, totalProfit: 0, cashReceived: 0, onlineReceived: 0, creditGiven: 0, transactions: 0 });
@@ -62,9 +95,9 @@ export default function Dashboard() {
   const inHandProfit = todayStats.totalProfit - todayStats.creditGiven;
 
   const topProducts = useMemo(() => {
-    const counts: Record<string, {name: string, sold: number}> = {};
-    todaysSales.forEach(sale => {
-      sale.items?.forEach((item: any) => {
+    const counts: Record<string, ProductCount> = {};
+    todaysSales.forEach((sale: SaleRecord) => {
+      sale.items?.forEach((item: SaleItem) => {
         if (!counts[item.productId]) counts[item.productId] = { name: item.productName, sold: 0 };
         counts[item.productId].sold += item.quantity;
       });
@@ -93,41 +126,58 @@ export default function Dashboard() {
   return (
     <div className="pb-24 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 font-sans bg-slate-50 min-h-screen pt-4 sm:pt-8">
       
-      <header className="flex justify-between items-end mb-8">
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{greeting}, {shop?.ownerName?.split(' ')[0] || "Admin"}</h1>
-          <p className="text-sm font-semibold text-slate-500 mt-1 flex items-center gap-2">
-            <Store size={16}/> {shop?.shopName || "My Store"} • {dateString}
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+            <Store size={14} className="text-indigo-500"/> {shop?.shopName || "My Store"} • {dateString}
           </p>
+          <BlurText
+            text={`${greeting}, ${shop?.ownerName?.split(' ')[0] || "Shopkeeper"}`}
+            delay={40}
+            animateBy="words"
+            direction="bottom"
+            className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight"
+          />
         </div>
+        
         <button 
           onClick={() => setIsReportOpen(true)} 
-          className="hidden sm:flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 active:scale-95 transition"
+          className="hidden sm:flex bg-slate-900 p-[2px] rounded-xl overflow-hidden shadow-xl shadow-indigo-900/10 shrink-0 group active:scale-95 transition-transform"
         >
-          <FileText size={18} /> Generate End-of-Day Report
+          <div className="bg-slate-900 px-5 py-2.5 rounded-[10px] flex items-center gap-2">
+            <FileText size={16} className="text-indigo-400"/>
+            <ShinyText 
+              text="End-of-Day Report" 
+              speed={3} 
+              className="text-sm font-bold tracking-wide" 
+              color="#94a3b8" 
+              shineColor="#ffffff" 
+            />
+          </div>
         </button>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden">
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-indigo-300 transition-colors">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Gross Sales Today</p>
           <p className="text-3xl font-black text-slate-900 tracking-tighter">₹{todayStats.totalSales.toLocaleString()}</p>
-          <div className="absolute right-4 bottom-4 text-slate-100"><TrendingUp size={48}/></div>
+          <div className="absolute right-4 bottom-4 text-slate-50 group-hover:text-indigo-50 transition-colors"><TrendingUp size={48}/></div>
         </div>
         
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden">
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-colors">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Gross Profit</p>
           <p className="text-3xl font-black text-emerald-600 tracking-tighter">₹{todayStats.totalProfit.toLocaleString()}</p>
         </div>
 
         <div className="bg-slate-900 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">In-Hand Profit</p>
-          <p className="text-3xl font-black text-white tracking-tighter">₹{inHandProfit.toLocaleString()}</p>
-          <p className="text-[10px] text-slate-400 mt-2">After deducting ₹{todayStats.creditGiven} given in credit</p>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 relative z-10">In-Hand Profit</p>
+          <p className="text-3xl font-black text-white tracking-tighter relative z-10">₹{inHandProfit.toLocaleString()}</p>
+          <p className="text-[10px] text-slate-400 mt-2 relative z-10">After deducting ₹{todayStats.creditGiven} given in credit</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Cashflow Breakdown</p>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Cashflow Breakdown</p>
           <div className="space-y-2">
             <div className="flex justify-between text-sm"><span className="text-slate-500 font-medium">Cash</span><span className="font-bold text-slate-900">₹{todayStats.cashReceived}</span></div>
             <div className="flex justify-between text-sm"><span className="text-slate-500 font-medium">Online</span><span className="font-bold text-indigo-600">₹{todayStats.onlineReceived}</span></div>
@@ -138,7 +188,7 @@ export default function Dashboard() {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
             <Link href="/sales" className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-sm hover:border-indigo-400 hover:shadow-md transition group">
               <div className="bg-indigo-50 text-indigo-600 p-3 rounded-xl group-hover:scale-110 transition"><ShoppingCart size={24} /></div>
               <span className="text-sm font-bold text-slate-800">New Sale</span>
@@ -147,20 +197,27 @@ export default function Dashboard() {
               <div className="bg-emerald-50 text-emerald-600 p-3 rounded-xl group-hover:scale-110 transition"><Package size={24} /></div>
               <span className="text-sm font-bold text-slate-800">Add Product</span>
             </Link>
-            <button onClick={() => setIsReportOpen(true)} className="sm:hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-xl active:scale-95 transition">
+            <Link href="/customers" className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-sm hover:border-orange-400 hover:shadow-md transition group">
+              <div className="bg-orange-50 text-orange-600 p-3 rounded-xl group-hover:scale-110 transition"><Users size={24} /></div>
+              <span className="text-sm font-bold text-slate-800">Udhaar Log</span>
+            </Link>
+            <button onClick={() => setIsReportOpen(true)} className="col-span-2 sm:hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-xl active:scale-95 transition">
               <div className="bg-slate-800 text-white p-3 rounded-xl"><FileText size={24} /></div>
-              <span className="text-sm font-bold text-white">Daily Report</span>
+              <span className="text-sm font-bold text-white">Generate Daily Report</span>
             </button>
           </div>
 
           <div>
-            <h2 className="text-lg font-black text-slate-900 mb-4 tracking-tight">Recent Transactions</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">Recent Transactions</h2>
+              <Link href="/sales" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">View All <ArrowRight size={12}/></Link>
+            </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               {todaysSales.length === 0 ? (
                 <div className="p-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No sales recorded today.</div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {todaysSales.slice(0, 6).map(sale => (
+                  {todaysSales.slice(0, 6).map((sale: SaleRecord) => (
                     <div key={sale.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition">
                       <div className="flex items-center gap-4">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black ${sale.paymentMethod === 'Credit' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
@@ -185,19 +242,21 @@ export default function Dashboard() {
 
         <div>
           <h2 className="text-lg font-black text-slate-900 mb-4 tracking-tight">Top Sellers Today</h2>
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-2">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3">
             {topProducts.length === 0 ? (
               <div className="p-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No data yet.</div>
             ) : (
-              topProducts.map((prod, idx) => (
-                <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 rounded-xl transition">
-                  <div className="flex items-center gap-3">
-                    <span className="w-6 text-center text-sm font-black text-slate-300">{idx + 1}</span>
-                    <p className="text-sm font-bold text-slate-800">{prod.name}</p>
+              <div className="space-y-2">
+                {topProducts.map((prod: ProductCount, idx: number) => (
+                  <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 rounded-xl transition border border-transparent hover:border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-black">{idx + 1}</div>
+                      <p className="text-sm font-bold text-slate-800">{prod.name}</p>
+                    </div>
+                    <p className="text-xs font-black text-slate-600">{prod.sold} sold</p>
                   </div>
-                  <p className="text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md">{prod.sold} sold</p>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -212,7 +271,6 @@ export default function Dashboard() {
               <button onClick={() => setIsReportOpen(false)} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition"><X size={20}/></button>
             </div>
 
-            {/* 🔥 FIX: ALL TAILWIND COLORS REPLACED WITH RAW HEX STRINGS IN THIS PRINTABLE AREA 🔥 */}
             <div className="flex-1 overflow-y-auto p-8 bg-[#ffffff]" id="end-day-report-content">
               <div className="text-center mb-8">
                 <h1 className="text-2xl font-black text-[#0f172a] uppercase tracking-tighter">{shop?.shopName}</h1>
