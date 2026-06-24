@@ -36,8 +36,8 @@ export default function SuperAdminPage() {
   const loadShops = async () => {
     try {
       const data = await getAllPlatformShops();
-      // Sort so active shops are top, then suspended, then hidden
-      data.sort((a: any, b: any) => {
+      // FIX: Replaced 'any' with the strictly typed 'AdminShop'
+      data.sort((a: AdminShop, b: AdminShop) => {
         if (a.isHidden !== b.isHidden) return a.isHidden ? 1 : -1;
         return a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1;
       });
@@ -282,8 +282,10 @@ export default function SuperAdminPage() {
                   <div className="p-2 bg-gray-50 text-gray-600 rounded-lg"><Calendar size={18}/></div>
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Registration Date</p>
-                    <p className="text-sm font-bold text-gray-900 tabular-nums">{new Date(selectedShop.createdAt).toLocaleDateString()}</p>
-                  </div>
+                    <p className="font-bold text-gray-900 tabular-nums">
+                    {selectedShop.createdAt ? new Date(selectedShop.createdAt).toLocaleDateString() : "N/A"}
+                    </p>                
+                 </div>
                 </div>
               </div>
             </div>
@@ -306,8 +308,9 @@ export default function SuperAdminPage() {
                     <EyeOff size={16}/> Soft Delete (Hide)
                   </button>
                   
+                  {/* FIX: Using ?? false to satisfy TypeScript strict boolean requirement */}
                   <button 
-                    onClick={() => handleToggleStatus(selectedShop.id, selectedShop.isActive)}
+                    onClick={() => handleToggleStatus(selectedShop.id, selectedShop.isActive ?? false)}
                     className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition shadow-md ${selectedShop.isActive ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-sage-green text-white hover:bg-green-600'}`}
                   >
                     {selectedShop.isActive ? <><Ban size={16}/> Suspend Activity</> : <><CheckCircle size={16}/> Reactivate Activity</>}
