@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { Search, Plus, Minus, Trash2, ShoppingCart, User, MapPin, CreditCard, ShieldCheck, PackageOpen, Banknote, ShieldAlert, Download, X, Store, Phone, FileText, CheckCircle2, Receipt } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, User, MapPin, CreditCard, ShieldCheck, PackageOpen, Banknote, Download, X, Store, Phone, FileText, CheckCircle2, Receipt } from "lucide-react";
 import { useProductStore } from "@/store/useProductStore";
 import { useSalesStore } from "@/store/useSalesStore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -116,11 +116,14 @@ export default function SalesPage() {
   const removeFromCart = (productId: string) => setCart(prev => prev.filter(item => item.productId !== productId));
   const clearCart = () => setCart([]);
 
-  const handlePreview = () => {
+  const handleProceedToCheckout = () => {
     if (cart.length === 0) return toast.error("Cart is empty.");
+    setIsPreviewOpen(true);
+  };
+
+  const confirmSale = async () => {
+    // STRICT VALIDATION FOR INVOICES & CREDIT MOVED TO CONFIRM STEP
     if (!paymentMethod) return toast.error("Select a payment method.");
-    
-    // STRICT VALIDATION FOR INVOICES & CREDIT
     if (invoiceNeeded) {
       if (!customerName.trim() || !customerAddress.trim() || !customerPhone.trim()) {
         return toast.error("Name, Phone, and Address are required for an Official Invoice.");
@@ -129,10 +132,6 @@ export default function SalesPage() {
       return toast.error("Customer Name is required for Credit sales.");
     }
 
-    setIsPreviewOpen(true);
-  };
-
-  const confirmSale = async () => {
     if (!activeShopId) {
       toast.error("Account validation error. Please refresh.");
       return;
@@ -155,7 +154,7 @@ export default function SalesPage() {
       paymentMethod: paymentMethod as "Cash" | "Online" | "Credit",
       customerName: customerName || null,
       customerAddress: customerAddress || null,
-      customerPhone: customerPhone || null, // Saved for invoice & directory
+      customerPhone: customerPhone || null,
       invoiceGenerated: invoiceNeeded,
       date: new Date().toISOString(), 
     };
@@ -179,86 +178,25 @@ export default function SalesPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] lg:h-[calc(100vh-0px)] flex flex-col lg:flex-row bg-slate-50 bg-[radial-gradient(#cbd5e1_1.5px,transparent_1.5px)] [background-size:24px_24px] font-sans overflow-hidden pb-24 lg:pb-0">
+    // Note: flex-col-reverse makes cart stick to bottom on mobile, products top
+    <div className="h-[calc(100vh-64px)] lg:h-[calc(100vh-0px)] flex flex-col-reverse lg:flex-row bg-slate-50 bg-[radial-gradient(#cbd5e1_1.5px,transparent_1.5px)] [background-size:24px_24px] font-sans overflow-hidden pb-20 lg:pb-0">
       
-      {/* LEFT: POS Checkout Register */}
-      <div className="w-full lg:w-[420px] xl:w-[460px] bg-white/90 backdrop-blur-md flex flex-col h-[55vh] lg:h-full z-20 shrink-0 border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+      {/* LEFT (Bottom on Mobile): POS Checkout Register (Cart Only) */}
+      <div className="w-full lg:w-[380px] xl:w-[420px] bg-white/90 backdrop-blur-md flex flex-col h-[40vh] lg:h-full z-20 shrink-0 border-t lg:border-t-0 lg:border-r border-slate-200 shadow-[0_-4px_24px_rgba(0,0,0,0.02)] lg:shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
         
-        {/* Customer Details & Invoice Toggle Section */}
-        <div className="p-4 border-b border-slate-100 bg-white shrink-0 relative" ref={suggestionRef}>
-          
-          {/* Invoice Needed Toggle */}
-          <div className="flex items-center gap-2 mb-3 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100/50 cursor-pointer" onClick={() => setInvoiceNeeded(!invoiceNeeded)}>
-            <div className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${invoiceNeeded ? 'bg-indigo-600 text-white' : 'border-2 border-slate-300 bg-white'}`}>
-              {invoiceNeeded && <ShieldCheck size={14} />}
-            </div>
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-widest select-none flex items-center gap-1.5">
-               Generate Official Invoice <FileText size={14} className="text-indigo-400"/>
-            </span>
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-black text-slate-800 flex items-center gap-2 uppercase tracking-widest">
+              <ShoppingCart size={16} /> Current Order
+            </h2>
+            <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{totalItems}</span>
           </div>
-
-          <div className="space-y-3">
-            <div className="relative">
-              <User size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${invoiceNeeded || paymentMethod === 'Credit' ? 'text-indigo-500' : 'text-slate-400'}`} />
-              <input 
-                type="text" 
-                placeholder={invoiceNeeded || paymentMethod === 'Credit' ? "Customer Name (Required)*" : "Customer Name (Optional)"} 
-                value={customerName} 
-                onChange={(e) => { setCustomerName(e.target.value); setShowSuggestions(true); }}
-                onFocus={() => setShowSuggestions(true)}
-                className={`w-full bg-slate-50 border rounded-xl py-2.5 pl-10 pr-3 text-sm font-bold outline-none transition-all ${(invoiceNeeded || paymentMethod === 'Credit') && !customerName ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`} 
-              />
-              
-              {showSuggestions && customerSuggestions.length > 0 && customerName && (
-                <div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2">
-                  {customerSuggestions.map((name, idx) => (
-                    <button
-                      key={idx}
-                      onMouseDown={(e) => e.preventDefault()} 
-                      onClick={() => { setCustomerName(name); setShowSuggestions(false); }}
-                      className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-b border-slate-50 last:border-0"
-                    >
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="relative">
-                <Phone size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${invoiceNeeded ? 'text-indigo-500' : 'text-slate-400'}`} />
-                <input 
-                  type="tel" 
-                  placeholder={invoiceNeeded ? "Phone (Required)*" : "Phone (Optional)"} 
-                  value={customerPhone} 
-                  onChange={(e) => setCustomerPhone(e.target.value)} 
-                  className={`w-full bg-slate-50 border rounded-xl py-2.5 pl-9 pr-3 text-sm font-medium outline-none transition-all ${invoiceNeeded && !customerPhone ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`} 
-                />
-              </div>
-              
-              <div className="relative">
-                <MapPin size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${invoiceNeeded ? 'text-indigo-500' : 'text-slate-400'}`} />
-                <input 
-                  type="text" 
-                  placeholder={invoiceNeeded ? "Address (Required)*" : "Address (Optional)"} 
-                  value={customerAddress} 
-                  onChange={(e) => setCustomerAddress(e.target.value)} 
-                  className={`w-full bg-slate-50 border rounded-xl py-2.5 pl-9 pr-3 text-sm font-medium outline-none transition-all ${invoiceNeeded && !customerAddress ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`} 
-                />
-              </div>
-            </div>
-          </div>
+          {cart.length > 0 && <button onClick={clearCart} className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors bg-red-50 px-2 py-1 rounded-md">Clear All</button>}
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 bg-slate-50/50 custom-scrollbar">
-          <div className="flex justify-between items-center mb-3 px-1">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Current Order ({totalItems})</h2>
-            {cart.length > 0 && <button onClick={clearCart} className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors">Clear All</button>}
-          </div>
-
           {cart.length === 0 ? (
-            <div className="h-[80%] flex flex-col items-center justify-center text-slate-400 opacity-60">
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60">
               <ShoppingCart size={40} strokeWidth={1.5} className="mb-3" />
               <p className="text-xs font-bold uppercase tracking-widest">Cart is empty</p>
             </div>
@@ -287,42 +225,25 @@ export default function SalesPage() {
         </div>
 
         <div className="bg-white border-t border-slate-200 p-4 shrink-0">
-          <div className="mb-4">
-            <div className="grid grid-cols-3 gap-2">
-              {(['Cash', 'Online', 'Credit'] as const).map((method) => (
-                <button 
-                  key={method}
-                  onClick={() => setPaymentMethod(method)} 
-                  className={`py-2 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${paymentMethod === method ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-                >
-                  {method === "Cash" && <Banknote size={16} />}
-                  {method === "Online" && <CreditCard size={16} />}
-                  {method === "Credit" && <User size={16} />}
-                  {method}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="flex flex-col gap-3">
             <div className="flex justify-between items-end px-1">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Grand Total</span>
-              <span className="text-4xl font-black text-emerald-600 tracking-tighter leading-none">₹{totalAmount.toLocaleString()}</span>
+              <span className="text-3xl lg:text-4xl font-black text-emerald-600 tracking-tighter leading-none">₹{totalAmount.toLocaleString()}</span>
             </div>
             
             <button 
-              onClick={handlePreview} 
+              onClick={handleProceedToCheckout} 
               disabled={cart.length === 0} 
               className="w-full bg-indigo-600 disabled:bg-slate-300 disabled:active:scale-100 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-base"
             >
-              <ShieldCheck size={20} /> Preview & Charge
+              <ShieldCheck size={20} /> Proceed to Checkout
             </button>
           </div>
         </div>
       </div>
 
-      {/* RIGHT: Professional Product Grid */}
-      <div className="flex-1 flex flex-col min-w-0 z-10">
+      {/* RIGHT (Top on Mobile): Professional Product Grid */}
+      <div className="flex-1 flex flex-col min-h-0 z-10">
         <div className="p-4 bg-white/80 backdrop-blur-md border-b border-slate-200 shrink-0 sticky top-0 z-30">
           <div className="relative w-full max-w-2xl mx-auto">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -382,20 +303,29 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* MOBILE PREVIEW MODAL */}
-      <SecureInvoiceModal 
+      {/* CHECKOUT & DETAILS MODAL */}
+      <CheckoutModal 
         isOpen={isPreviewOpen} 
         onClose={() => setIsPreviewOpen(false)} 
         onConfirm={confirmSale} 
         cart={cart} 
         total={totalAmount} 
-        paymentMethod={paymentMethod as any} 
+        paymentMethod={paymentMethod}
+        setPaymentMethod={setPaymentMethod}
         customerName={customerName} 
+        setCustomerName={setCustomerName}
         customerAddress={customerAddress}
+        setCustomerAddress={setCustomerAddress}
         customerPhone={customerPhone}
+        setCustomerPhone={setCustomerPhone}
         invoiceNeeded={invoiceNeeded}
+        setInvoiceNeeded={setInvoiceNeeded}
         shopDetails={shop} 
         isSubmitting={isSubmitting} 
+        customerSuggestions={customerSuggestions}
+        showSuggestions={showSuggestions}
+        setShowSuggestions={setShowSuggestions}
+        suggestionRef={suggestionRef}
       />
 
       {/* FINAL A4 GENERATOR MODAL */}
@@ -412,60 +342,122 @@ export default function SalesPage() {
 }
 
 /* =====================================================================
-   MOBILE PREVIEW MODAL (INLINE COMPONENT FOR SALES PAGE)
+   CHECKOUT MODAL (Contains Forms + Preview)
 ======================================================================== */
 
-function SecureInvoiceModal({
-  isOpen, onClose, onConfirm, cart, total, paymentMethod, customerName, customerAddress, customerPhone, invoiceNeeded, shopDetails, isSubmitting
+function CheckoutModal({
+  isOpen, onClose, onConfirm, cart, total, paymentMethod, setPaymentMethod, 
+  customerName, setCustomerName, customerAddress, setCustomerAddress, 
+  customerPhone, setCustomerPhone, invoiceNeeded, setInvoiceNeeded, 
+  shopDetails, isSubmitting, customerSuggestions, showSuggestions, 
+  setShowSuggestions, suggestionRef
 }: any) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200 overflow-hidden relative">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 overflow-hidden relative">
         
-        <div className="flex justify-between items-center p-3 border-b border-slate-100 shrink-0 bg-slate-50">
-          <h2 className="text-xs font-black text-slate-800 flex items-center gap-2 uppercase tracking-widest">
-            <Receipt size={14} /> Order Preview
+        <div className="flex justify-between items-center p-4 border-b border-slate-100 shrink-0 bg-slate-50">
+          <h2 className="text-sm font-black text-slate-800 flex items-center gap-2 uppercase tracking-widest">
+            <ShieldCheck size={16} className="text-indigo-600"/> Checkout Details
           </h2>
           <button onClick={onClose} disabled={isSubmitting} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition-colors">
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar" ref={suggestionRef}>
           
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Billed From</p>
-            <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-              <Store size={12} className="text-slate-400"/> {shopDetails?.shopName || "Store Name"}
-            </p>
-            <p className="text-[11px] font-semibold text-slate-700">{shopDetails?.ownerName}</p>
-            {shopDetails?.shopAddress && <p className="text-[10px] font-medium text-slate-500 leading-snug">{shopDetails.shopAddress}</p>}
-            {(shopDetails?.state || shopDetails?.pincode) && (
-              <p className="text-[10px] font-medium text-slate-500">{shopDetails?.state} {shopDetails?.pincode}</p>
-            )}
-            {shopDetails?.mobileNumber && <p className="text-[10px] font-medium text-slate-500">Ph: {shopDetails.mobileNumber}</p>}
+          {/* 1. Payment Method */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Payment Method*</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['Cash', 'Online', 'Credit'] as const).map((method) => (
+                <button 
+                  key={method}
+                  onClick={() => setPaymentMethod(method)} 
+                  className={`py-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${paymentMethod === method ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                >
+                  {method === "Cash" && <Banknote size={18} />}
+                  {method === "Online" && <CreditCard size={18} />}
+                  {method === "Credit" && <User size={18} />}
+                  {method}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {(customerName || customerAddress || customerPhone) && (
-            <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 space-y-1.5">
-              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest flex items-center justify-between">
-                Billed To
-                {invoiceNeeded && <span className="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[8px]">OFFICIAL INVOICE</span>}
-              </p>
-              {customerName && <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5"><User size={12} className="text-indigo-400"/> {customerName}</p>}
-              {customerPhone && <p className="text-[11px] font-medium text-slate-600 flex items-center gap-1.5"><Phone size={12} className="text-indigo-400"/> {customerPhone}</p>}
-              {customerAddress && <p className="text-[11px] font-medium text-slate-600 flex items-center gap-1.5"><MapPin size={12} className="text-indigo-400"/> {customerAddress}</p>}
+          {/* 2. Customer Details */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-2 mb-4 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/50 cursor-pointer" onClick={() => setInvoiceNeeded(!invoiceNeeded)}>
+              <div className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${invoiceNeeded ? 'bg-indigo-600 text-white' : 'border-2 border-slate-300 bg-white'}`}>
+                {invoiceNeeded && <ShieldCheck size={14} />}
+              </div>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-widest select-none flex items-center gap-1.5">
+                 Generate Official Invoice <FileText size={14} className="text-indigo-400"/>
+              </span>
             </div>
-          )}
 
+            <div className="space-y-3 relative">
+              <div className="relative">
+                <User size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${invoiceNeeded || paymentMethod === 'Credit' ? 'text-indigo-500' : 'text-slate-400'}`} />
+                <input 
+                  type="text" 
+                  placeholder={invoiceNeeded || paymentMethod === 'Credit' ? "Customer Name (Required)*" : "Customer Name (Optional)"} 
+                  value={customerName} 
+                  onChange={(e) => { setCustomerName(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  className={`w-full bg-white border rounded-xl py-3 pl-10 pr-3 text-sm font-bold outline-none transition-all ${(invoiceNeeded || paymentMethod === 'Credit') && !customerName ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`} 
+                />
+                {showSuggestions && customerSuggestions.length > 0 && customerName && (
+                  <div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2">
+                    {customerSuggestions.map((name: string, idx: number) => (
+                      <button
+                        key={idx}
+                        onMouseDown={(e) => e.preventDefault()} 
+                        onClick={() => { setCustomerName(name); setShowSuggestions(false); }}
+                        className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-b border-slate-50 last:border-0"
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="relative">
+                  <Phone size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${invoiceNeeded ? 'text-indigo-500' : 'text-slate-400'}`} />
+                  <input 
+                    type="tel" 
+                    placeholder={invoiceNeeded ? "Phone (Required)*" : "Phone (Optional)"} 
+                    value={customerPhone} 
+                    onChange={(e) => setCustomerPhone(e.target.value)} 
+                    className={`w-full bg-white border rounded-xl py-3 pl-9 pr-3 text-sm font-medium outline-none transition-all ${invoiceNeeded && !customerPhone ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`} 
+                  />
+                </div>
+                <div className="relative">
+                  <MapPin size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${invoiceNeeded ? 'text-indigo-500' : 'text-slate-400'}`} />
+                  <input 
+                    type="text" 
+                    placeholder={invoiceNeeded ? "Address (Required)*" : "Address (Optional)"} 
+                    value={customerAddress} 
+                    onChange={(e) => setCustomerAddress(e.target.value)} 
+                    className={`w-full bg-white border rounded-xl py-3 pl-9 pr-3 text-sm font-medium outline-none transition-all ${invoiceNeeded && !customerAddress ? 'border-red-300 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`} 
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Order Summary */}
           <div>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Items ({cart.length})</p>
-            <div className="space-y-1.5 mb-4">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Order Summary ({cart.length} Items)</p>
+            <div className="max-h-32 overflow-y-auto space-y-1.5 custom-scrollbar pr-2">
               {cart.map((item: any, idx: number) => (
                 <div key={idx} className="flex justify-between items-start text-xs font-medium text-slate-700">
-                  <span className="flex-1 pr-2 leading-tight">
+                  <span className="flex-1 pr-2 leading-tight truncate">
                     <span className="font-bold text-slate-900 mr-1">{item.quantity}x</span> 
                     {item.productName}
                   </span>
@@ -473,32 +465,20 @@ function SecureInvoiceModal({
                 </div>
               ))}
             </div>
-            
-            <div className="mt-6 flex justify-center opacity-40">
-              <img src="https://res.cloudinary.com/dpqsadqxj/image/upload/v1782143700/logo_pwered_by_qurevo_qpbgdp.png" alt="Qurevo" className="h-3.5 object-contain grayscale" />
-            </div>
           </div>
+
         </div>
 
-        <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0">
+        {/* Footer Actions */}
+        <div className="p-4 bg-white border-t border-slate-100 shrink-0 shadow-[0_-4px_15px_rgba(0,0,0,0.02)]">
           <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              {paymentMethod === "Cash" && <Banknote size={14} className="text-emerald-500" />}
-              {paymentMethod === "Online" && <CreditCard size={14} className="text-blue-500" />}
-              {paymentMethod === "Credit" && <User size={14} className="text-orange-500" />}
-              {paymentMethod}
-            </div>
-            <span className="text-xl font-black text-emerald-600 tracking-tighter">₹{total.toLocaleString()}</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Amount</span>
+            <span className="text-2xl font-black text-emerald-600 tracking-tighter">₹{total.toLocaleString()}</span>
           </div>
           
-          <div className="flex gap-2">
-            <button onClick={onClose} disabled={isSubmitting} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 text-[11px] font-bold rounded-xl hover:bg-slate-100 transition active:scale-95 disabled:opacity-50">
-              Edit
-            </button>
-            <button onClick={onConfirm} disabled={isSubmitting} className="flex-[2] py-2.5 bg-indigo-600 text-white text-[11px] font-bold rounded-xl shadow-md shadow-indigo-600/20 hover:bg-indigo-700 transition active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50">
-              {isSubmitting ? "Processing..." : <><CheckCircle2 size={14} /> Confirm Sale</>}
-            </button>
-          </div>
+          <button onClick={onConfirm} disabled={isSubmitting} className="w-full py-3.5 bg-indigo-600 text-white text-sm font-black rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 transition active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50">
+            {isSubmitting ? "Processing..." : <><CheckCircle2 size={18} /> Confirm & Charge</>}
+          </button>
         </div>
 
       </div>
@@ -507,7 +487,7 @@ function SecureInvoiceModal({
 }
 
 /* =====================================================================
-   POST-SALE FINAL A4 INVOICE GENERATOR
+   POST-SALE FINAL A4 INVOICE GENERATOR (UNCHANGED)
 ======================================================================== */
 
 interface PostSaleInvoiceProps {
