@@ -43,8 +43,8 @@ export const useSalesStore = create<SalesState>((set) => ({
         };
       }) as Sale[];
       
-      // Now .getTime() is 100% safe to use
-      salesData.sort((a, b) => b.date.getTime() - a.date.getTime());
+      // FIX APPLIED HERE: Type assertion to satisfy TypeScript compiler
+      salesData.sort((a, b) => (b.date as Date).getTime() - (a.date as Date).getTime());
       
       set({ sales: salesData });
     } catch (error) {
