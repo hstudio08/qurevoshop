@@ -8,7 +8,8 @@ import {
   Globe, Server, Zap, CheckCircle2
 } from "lucide-react";
 import { db } from "@/lib/firebase/config";
-import { collection, getDocs, limit, query } from "firebase/firestore";
+// 1. Added 'where' to the import list
+import { collection, getDocs, limit, query, where } from "firebase/firestore";
 
 export default function LandingPage() {
   const [publicShops, setPublicShops] = useState<any[]>([]);
@@ -16,7 +17,13 @@ export default function LandingPage() {
   useEffect(() => {
     const fetchShops = async () => {
       try {
-        const q = query(collection(db, "shops"), limit(10));
+        // 2. Added the where() clause to filter out hidden shops
+        const q = query(
+          collection(db, "shops"), 
+          where("isHidden", "!=", true),
+          limit(10)
+        );
+        
         const snap = await getDocs(q);
         const shopsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setPublicShops(shopsData);
@@ -26,6 +33,8 @@ export default function LandingPage() {
     };
     fetchShops();
   }, []);
+
+  // ... rest of your component
 
   const displayShops = publicShops.length > 0 ? publicShops : [
     { id: '1', shopName: 'Sharma General Store', shopAddress: 'New Market, Delhi', category: 'Grocery', status: 'Open', image: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=600&h=400&fit=crop', products: '320+' }, 
@@ -97,7 +106,7 @@ export default function LandingPage() {
         <div className="max-w-[1400px] w-full mx-auto px-4 sm:px-8 grid lg:grid-cols-2 gap-16 items-center relative z-10">
           <div className="text-center lg:text-left">
             <div className="inline-flex items-center gap-2 bg-white text-indigo-600 px-4 py-2 rounded-full text-xs font-bold mb-8 shadow-sm border border-slate-100">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Trusted by 25,000+ Shops
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Trusted by Multiple Shops
             </div>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-slate-900 leading-[1.05] mb-6 tracking-tighter">
               Apni Dukaan ko <br />
@@ -122,8 +131,8 @@ export default function LandingPage() {
                  <div className="bg-gradient-to-b from-indigo-600 to-indigo-800 p-6 pb-12 text-white relative">
                    <div className="flex justify-between items-center mb-8 mt-2">
                      <div>
-                       <p className="text-[10px] opacity-80 font-medium uppercase tracking-widest mb-1">Namaste, Ravi 👋</p>
-                       <p className="font-bold text-sm tracking-tight">Sharma General Store</p>
+                       <p className="text-[10px] opacity-80 font-medium uppercase tracking-widest mb-1">Asalamualikum, Imran 👋</p>
+                       <p className="font-bold text-sm tracking-tight">Imran General Store</p>
                      </div>
                      <div className="w-9 h-9 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center"><Store size={16}/></div>
                    </div>
@@ -175,8 +184,8 @@ export default function LandingPage() {
       {/* 3. FLUID FEATURES GRID */}
       <div id="features" className="w-full px-4 sm:px-8 py-16 bg-white">
         <div className="max-w-[1400px] mx-auto text-center mb-12">
-           <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-4">Enterprise POS in your Pocket</h2>
-           <p className="text-slate-500 font-medium max-w-2xl mx-auto text-sm">Say goodbye to paper ledgers. Qurevo provides everything you need to run your retail business efficiently.</p>
+           <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-4">ENTERPRISE POS IN YOUR POCKET</h2>
+           <p className="text-slate-500 font-medium max-w-2xl mx-auto text-sm">Say goodbye to paper ledgers. Qurevo provides everything, run your retail business efficiently.</p>
         </div>
         <div className="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
           {[

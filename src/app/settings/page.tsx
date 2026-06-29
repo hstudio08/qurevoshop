@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Building, LogOut, Check, HelpCircle, Store, UploadCloud, Image as ImageIcon, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Building, LogOut, Check, HelpCircle, Store, UploadCloud, Image as ImageIcon, AlertCircle, CheckCircle2, Monitor } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { db, auth } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
@@ -10,9 +10,12 @@ import toast from "react-hot-toast";
 export default function SettingsPage() {
   const { shop, user, setAuth, logout } = useAuthStore();
   
-  // State for Image Upload
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  // States for Image Uploads
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
   
   // State for Text Form
   const [isSaving, setIsSaving] = useState(false);
@@ -23,22 +26,23 @@ export default function SettingsPage() {
     businessCategory: shop?.businessCategory || "",
   });
 
-  // --- IMAGE UPLOAD LOGIC ---
-  const IMGBB_API_KEY = process.env.NEXT_PUBLIC_IMGBB_API_KEY || "YOUR_IMGBB_API_KEY_HERE";
+  const IMGBB_API_KEY = process.env.NEXT_PUBLIC_IMGBB_API_KEY || "58724c8509a2aa71b59f73716b84db65";
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'cover') => {
     const file = e.target.files?.[0];
     if (!file || !shop?.id) return;
 
-    // Strict 100KB limit
-    if (file.size > 100 * 1024) {
-      toast.error("Image is too large! Must be under 100KB.");
-      if (fileInputRef.current) fileInputRef.current.value = "";
+    // Optional size limit check (increased to 500KB for cover photos)
+    const limit = type === 'cover' ? 500 * 1024 : 100 * 1024;
+    if (file.size > limit) {
+      toast.error(`Image is too large! Max ${type === 'cover' ? '500KB' : '100KB'}.`);
+      e.target.value = "";
       return;
     }
 
-    setIsUploading(true);
-    const toastId = toast.loading("Uploading store identity...");
+    const setUploading = type === 'logo' ? setIsUploadingLogo : setIsUploadingCover;
+    setUploading(true);
+    const toastId = toast.loading(`Uploading ${type}...`);
 
     try {
       const imgFormData = new FormData();
@@ -52,24 +56,23 @@ export default function SettingsPage() {
 
       if (data.success) {
         const imageUrl = data.data.display_url;
-        await updateDoc(doc(db, "shops", shop.id), { shopLogoUrl: imageUrl });
+        const updateField = type === 'logo' ? { shopLogoUrl: imageUrl } : { coverPhotoUrl: imageUrl };
         
-        // Update Local State
-        if (user) setAuth(user, { ...shop, shopLogoUrl: imageUrl });
-        toast.success("Store logo updated!", { id: toastId });
+        await updateDoc(doc(db, "shops", shop.id), updateField);
+        if (user) setAuth(user, { ...shop, ...updateField });
+        
+        toast.success(`${type === 'logo' ? 'Logo' : 'Cover Photo'} updated!`, { id: toastId });
       } else {
         throw new Error("ImgBB upload rejected.");
       }
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to upload image. Check API key.", { id: toastId });
+      toast.error(`Failed to upload ${type}.`, { id: toastId });
     } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setUploading(false);
+      e.target.value = "";
     }
   };
 
-  // --- TEXT FORM LOGIC ---
   const handleUpdateDetails = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shop) return;
@@ -87,85 +90,120 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-24 font-sans">
+    <div className="max-w-4xl mx-auto space-y-6 pb-24 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Settings & Profile</h1>
-        <p className="text-sm font-medium text-slate-500 mt-1">Manage your business information and public identity.</p>
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Store Profile</h1>
+        <p className="text-sm font-medium text-slate-500 mt-1">Manage your public storefront identity and details.</p>
       </div>
 
-      {/* 1. Brand Identity (Image Upload) */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      {/* 1. Brand Identity (Dual Image Upload) */}
+      <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-sm border border-slate-200/60">
         <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
-          <Store size={18} className="text-indigo-600"/> Public Storefront Logo
+          <Monitor size={18} className="text-indigo-600"/> Storefront Visuals
         </h3>
         
-        <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-          <div className="w-28 h-28 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center shrink-0 overflow-hidden relative">
-            {isUploading ? (
-              <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-            ) : shop?.shopLogoUrl ? (
-              <img src={shop.shopLogoUrl} alt="Store Logo" className="w-full h-full object-cover" />
-            ) : (
-              <ImageIcon size={32} className="text-slate-300" />
-            )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          
+          {/* Cover Photo Uploader */}
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Cover Banner</label>
+            <p className="text-[11px] font-medium text-slate-400 mb-2 leading-relaxed">Displays at the top of your public store. Choose a wide landscape image (16:9).</p>
+            
+            {/* Aspect Video (16:9) frame to show exact crop */}
+            <div className="w-full aspect-video rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden relative group">
+              {isUploadingCover ? (
+                <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+              ) : shop?.coverPhotoUrl ? (
+                <>
+                  {/* object-cover ensures they see the exact crop */}
+                  <img src={shop.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => coverInputRef.current?.click()} className="bg-black/70 text-white px-4 py-2 rounded-xl text-sm font-bold backdrop-blur-sm">Change Cover</button>
+                  </div>
+                </>
+              ) : (
+                <button onClick={() => coverInputRef.current?.click()} className="flex flex-col items-center text-slate-400 hover:text-indigo-600 transition-colors">
+                  <ImageIcon size={32} className="mb-2" />
+                  <span className="text-sm font-bold">Upload Cover</span>
+                </button>
+              )}
+            </div>
+            <input type="file" accept="image/*" ref={coverInputRef} onChange={(e) => handleImageUpload(e, 'cover')} className="hidden" />
           </div>
 
-          <div className="flex-1">
-            <input 
-              type="file" 
-              accept="image/png, image/jpeg, image/webp" 
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              className="hidden" 
-            />
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="w-fit bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-800 active:scale-95 transition flex items-center gap-2 disabled:opacity-50 mb-3"
-            >
-              <UploadCloud size={16} /> {isUploading ? "Uploading..." : "Select Logo"}
-            </button>
-            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              <span className="flex items-center gap-1"><AlertCircle size={14} className="text-orange-400"/> Max 100KB</span>
-              <span className="flex items-center gap-1"><CheckCircle2 size={14} className="text-emerald-400"/> JPG, PNG, WEBP</span>
+          {/* Square Logo Uploader */}
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Square Logo</label>
+            <p className="text-[11px] font-medium text-slate-400 mb-2 leading-relaxed">Your primary brand icon. Will be displayed as a square overlapping the cover.</p>
+            
+            <div className="flex gap-6 items-center">
+              {/* Aspect Square frame to show exact crop */}
+              <div className="w-32 h-32 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center shrink-0 overflow-hidden relative group">
+                {isUploadingLogo ? (
+                  <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                ) : shop?.shopLogoUrl ? (
+                  <>
+                    <img src={shop.shopLogoUrl} alt="Logo" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => logoInputRef.current?.click()} className="bg-black/70 p-2 rounded-xl text-white backdrop-blur-sm"><UploadCloud size={20}/></button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => logoInputRef.current?.click()} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                    <Store size={32} />
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex-1">
+                <button onClick={() => logoInputRef.current?.click()} disabled={isUploadingLogo} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-800 active:scale-95 transition flex items-center gap-2 mb-3">
+                  <UploadCloud size={16} /> Select Logo
+                </button>
+                <div className="flex flex-col gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  <span className="flex items-center gap-1.5"><AlertCircle size={14} className="text-orange-400"/> Max 100KB</span>
+                  <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-emerald-400"/> JPG, PNG, WEBP</span>
+                </div>
+              </div>
             </div>
+            <input type="file" accept="image/*" ref={logoInputRef} onChange={(e) => handleImageUpload(e, 'logo')} className="hidden" />
           </div>
+
         </div>
       </div>
 
       {/* 2. Business Details (Text Form) */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-sm border border-slate-200/60">
         <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
           <Building size={18} className="text-indigo-600"/> Business Details
         </h3>
         
         <form onSubmit={handleUpdateDetails} className="space-y-5">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Shop Name</label>
-            <input type="text" required value={formData.shopName} onChange={e => setFormData({...formData, shopName: e.target.value})} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 text-sm font-bold outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
+          <div className="group">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1 group-focus-within:text-indigo-600 transition-colors">Shop Name</label>
+            <input type="text" required value={formData.shopName} onChange={e => setFormData({...formData, shopName: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 transition-all hover:bg-slate-100/50" />
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-             <div>
-              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Contact Number</label>
-              <input type="text" required value={formData.mobileNumber} onChange={e => setFormData({...formData, mobileNumber: e.target.value})} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 text-sm font-bold outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
+             <div className="group">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1 group-focus-within:text-indigo-600 transition-colors">Contact Number</label>
+              <input type="text" required value={formData.mobileNumber} onChange={e => setFormData({...formData, mobileNumber: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 transition-all hover:bg-slate-100/50" />
             </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Business Category</label>
-              <input type="text" value={formData.businessCategory} onChange={e => setFormData({...formData, businessCategory: e.target.value})} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 text-sm font-bold outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="e.g. Pharmacy, Grocery..." />
+            <div className="group">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1 group-focus-within:text-indigo-600 transition-colors">Business Category</label>
+              <input type="text" value={formData.businessCategory} onChange={e => setFormData({...formData, businessCategory: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 transition-all hover:bg-slate-100/50" placeholder="e.g. Pharmacy, Grocery..." />
             </div>
           </div>
           
-          <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Shop Address</label>
-            <input type="text" required value={formData.shopAddress} onChange={e => setFormData({...formData, shopAddress: e.target.value})} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 text-sm font-bold outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
+          <div className="group">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1 group-focus-within:text-indigo-600 transition-colors">Complete Address</label>
+            <input type="text" required value={formData.shopAddress} onChange={e => setFormData({...formData, shopAddress: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 transition-all hover:bg-slate-100/50" />
           </div>
           
-          <div className="pt-2">
-            <button type="submit" disabled={isSaving} className="w-full sm:w-auto bg-indigo-600 text-white text-sm font-bold px-8 py-3.5 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-2 disabled:opacity-70">
-              {isSaving ? "Saving..." : <><Check size={16} /> Save Changes</>}
+          <div className="pt-4">
+            <button type="submit" disabled={isSaving} className="w-full sm:w-auto bg-indigo-600 text-white text-sm font-bold px-10 py-4 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 disabled:opacity-70">
+              {isSaving ? "Saving..." : <><Check size={18} /> Save Changes</>}
             </button>
           </div>
         </form>
@@ -173,19 +211,19 @@ export default function SettingsPage() {
 
       {/* 3. Support & Logout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-        <a href="mailto:qurevotechnologies@gmail.com" className="flex items-center gap-3 p-4 bg-white hover:bg-slate-50 rounded-2xl transition border border-slate-200 shadow-sm">
-          <div className="bg-slate-100 p-2 rounded-lg"><HelpCircle size={18} className="text-slate-600" /></div>
+        <a href="mailto:qurevotechnologies@gmail.com" className="flex items-center gap-4 p-5 bg-white hover:bg-slate-50 rounded-[1.5rem] transition border border-slate-200/60 shadow-sm group">
+          <div className="bg-slate-100 p-3 rounded-xl group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors"><HelpCircle size={20} className="text-slate-500 group-hover:text-indigo-600" /></div>
           <div>
-            <span className="block text-sm font-bold text-slate-900">Email Support</span>
-            <span className="block text-xs font-medium text-slate-500">qurevotechnologies@gmail.com</span>
+            <span className="block text-sm font-bold text-slate-900 mb-0.5">Email Support</span>
+            <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">qurevotechnologies@gmail.com</span>
           </div>
         </a>
         
-        <button onClick={() => { logout(); auth.signOut(); }} className="flex items-center gap-3 p-4 bg-white hover:bg-red-50 rounded-2xl transition border border-slate-200 hover:border-red-200 shadow-sm group">
-          <div className="bg-red-50 p-2 rounded-lg group-hover:bg-red-100 transition-colors"><LogOut size={18} className="text-red-600" /></div>
-          <div className="text-left">
-            <span className="block text-sm font-bold text-red-600">Logout Securely</span>
-            <span className="block text-xs font-medium text-slate-500 group-hover:text-red-400">End your current session</span>
+        <button onClick={() => { logout(); auth.signOut(); }} className="flex items-center gap-4 p-5 bg-white hover:bg-red-50 rounded-[1.5rem] transition border border-slate-200/60 hover:border-red-200 shadow-sm group text-left">
+          <div className="bg-red-50 p-3 rounded-xl group-hover:bg-red-100 transition-colors"><LogOut size={20} className="text-red-500" /></div>
+          <div>
+            <span className="block text-sm font-bold text-red-600 mb-0.5">Logout Securely</span>
+            <span className="block text-[11px] font-bold text-slate-400 group-hover:text-red-400 uppercase tracking-wider transition-colors">End your current session</span>
           </div>
         </button>
       </div>

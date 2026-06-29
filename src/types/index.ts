@@ -51,4 +51,5 @@ export interface Shop {
   isHidden?: boolean;
   createdAt?: string | Date;
   shopLogoUrl?: string;
+  coverPhotoUrl?: string;
 }
