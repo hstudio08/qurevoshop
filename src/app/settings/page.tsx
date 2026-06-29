@@ -1,11 +1,59 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Building, LogOut, Check, HelpCircle, Store, UploadCloud, Image as ImageIcon, AlertCircle, CheckCircle2, Monitor } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { Building, LogOut, Check, HelpCircle, Store, UploadCloud, Image as ImageIcon, AlertCircle, CheckCircle2, Monitor, X } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { db, auth } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
 import toast from "react-hot-toast";
+import Cropper from "react-easy-crop";
+
+// --- Helper function to extract the cropped image ---
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", (error) => reject(error));
+    image.setAttribute("crossOrigin", "anonymous");
+    image.src = url;
+  });
+
+async function getCroppedImg(
+  imageSrc: string,
+  pixelCrop: { x: number; y: number; width: number; height: number }
+): Promise<Blob | null> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) return null;
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("Canvas is empty"));
+        return;
+      }
+      resolve(blob);
+    }, "image/jpeg");
+  });
+}
+// ----------------------------------------------------
 
 export default function SettingsPage() {
   const { shop, user, setAuth, logout } = useAuthStore();
@@ -16,6 +64,14 @@ export default function SettingsPage() {
   
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
+  
+  // States for Cropper
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [cropType, setCropType] = useState<'logo' | 'cover' | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   
   // State for Text Form
   const [isSaving, setIsSaving] = useState(false);
@@ -28,26 +84,52 @@ export default function SettingsPage() {
 
   const IMGBB_API_KEY = process.env.NEXT_PUBLIC_IMGBB_API_KEY || "58724c8509a2aa71b59f73716b84db65";
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'cover') => {
+  // 1. Handle File Selection and Open Cropper
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'cover') => {
     const file = e.target.files?.[0];
-    if (!file || !shop?.id) return;
+    if (!file) return;
 
-    // Optional size limit check (increased to 500KB for cover photos)
-    const limit = type === 'cover' ? 500 * 1024 : 100 * 1024;
-    if (file.size > limit) {
-      toast.error(`Image is too large! Max ${type === 'cover' ? '500KB' : '100KB'}.`);
+    // Size limit check (increased to 2MB to allow high-res before crop)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error(`Image is too large! Please select an image under 2MB.`);
       e.target.value = "";
       return;
     }
 
-    const setUploading = type === 'logo' ? setIsUploadingLogo : setIsUploadingCover;
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      setImageToCrop(reader.result?.toString() || null);
+      setCropType(type);
+      setCrop(({ x: 0, y: 0 }));
+      setZoom(1);
+      setCropModalOpen(true);
+    });
+    reader.readAsDataURL(file);
+    e.target.value = ""; // reset input so same file can be selected again
+  };
+
+  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  // 2. Handle Cropping and Uploading to ImgBB
+  const handleCropAndUpload = async () => {
+    if (!imageToCrop || !croppedAreaPixels || !cropType || !shop?.id) return;
+    
+    setCropModalOpen(false); // Close modal immediately
+    const setUploading = cropType === 'logo' ? setIsUploadingLogo : setIsUploadingCover;
     setUploading(true);
-    const toastId = toast.loading(`Uploading ${type}...`);
+    const toastId = toast.loading(`Processing and uploading ${cropType}...`);
 
     try {
-      const imgFormData = new FormData();
-      imgFormData.append("image", file);
+      // Get cropped blob
+      const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      if (!croppedBlob) throw new Error("Failed to process cropped image.");
 
+      const imgFormData = new FormData();
+      imgFormData.append("image", croppedBlob, `${cropType}.jpg`);
+
+      // Upload to ImgBB
       const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
         method: "POST",
         body: imgFormData,
@@ -56,20 +138,21 @@ export default function SettingsPage() {
 
       if (data.success) {
         const imageUrl = data.data.display_url;
-        const updateField = type === 'logo' ? { shopLogoUrl: imageUrl } : { coverPhotoUrl: imageUrl };
+        const updateField = cropType === 'logo' ? { shopLogoUrl: imageUrl } : { coverPhotoUrl: imageUrl };
         
         await updateDoc(doc(db, "shops", shop.id), updateField);
         if (user) setAuth(user, { ...shop, ...updateField });
         
-        toast.success(`${type === 'logo' ? 'Logo' : 'Cover Photo'} updated!`, { id: toastId });
+        toast.success(`${cropType === 'logo' ? 'Logo' : 'Cover Photo'} updated!`, { id: toastId });
       } else {
         throw new Error("ImgBB upload rejected.");
       }
     } catch (error) {
-      toast.error(`Failed to upload ${type}.`, { id: toastId });
+      toast.error(`Failed to upload ${cropType}.`, { id: toastId });
+      console.error(error);
     } finally {
       setUploading(false);
-      e.target.value = "";
+      setImageToCrop(null);
     }
   };
 
@@ -94,14 +177,14 @@ export default function SettingsPage() {
       
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Store Profile</h1>
-        <p className="text-sm font-medium text-slate-500 mt-1">Manage your public storefront identity and details.</p>
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Shop Profile</h1>
+        <p className="text-sm font-medium text-slate-500 mt-1">Manage your public ShopFront images and details.</p>
       </div>
 
       {/* 1. Brand Identity (Dual Image Upload) */}
       <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-sm border border-slate-200/60">
         <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
-          <Monitor size={18} className="text-indigo-600"/> Storefront Visuals
+          <Monitor size={18} className="text-indigo-600"/> ShopFront Visuals
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -111,13 +194,11 @@ export default function SettingsPage() {
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Cover Banner</label>
             <p className="text-[11px] font-medium text-slate-400 mb-2 leading-relaxed">Displays at the top of your public store. Choose a wide landscape image (16:9).</p>
             
-            {/* Aspect Video (16:9) frame to show exact crop */}
             <div className="w-full aspect-video rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden relative group">
               {isUploadingCover ? (
                 <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
               ) : shop?.coverPhotoUrl ? (
                 <>
-                  {/* object-cover ensures they see the exact crop */}
                   <img src={shop.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => coverInputRef.current?.click()} className="bg-black/70 text-white px-4 py-2 rounded-xl text-sm font-bold backdrop-blur-sm">Change Cover</button>
@@ -130,7 +211,7 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
-            <input type="file" accept="image/*" ref={coverInputRef} onChange={(e) => handleImageUpload(e, 'cover')} className="hidden" />
+            <input type="file" accept="image/*" ref={coverInputRef} onChange={(e) => handleFileSelect(e, 'cover')} className="hidden" />
           </div>
 
           {/* Square Logo Uploader */}
@@ -139,7 +220,6 @@ export default function SettingsPage() {
             <p className="text-[11px] font-medium text-slate-400 mb-2 leading-relaxed">Your primary brand icon. Will be displayed as a square overlapping the cover.</p>
             
             <div className="flex gap-6 items-center">
-              {/* Aspect Square frame to show exact crop */}
               <div className="w-32 h-32 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center shrink-0 overflow-hidden relative group">
                 {isUploadingLogo ? (
                   <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
@@ -162,12 +242,12 @@ export default function SettingsPage() {
                   <UploadCloud size={16} /> Select Logo
                 </button>
                 <div className="flex flex-col gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  <span className="flex items-center gap-1.5"><AlertCircle size={14} className="text-orange-400"/> Max 100KB</span>
+                  <span className="flex items-center gap-1.5"><AlertCircle size={14} className="text-orange-400"/> Max 2MB before crop</span>
                   <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-emerald-400"/> JPG, PNG, WEBP</span>
                 </div>
               </div>
             </div>
-            <input type="file" accept="image/*" ref={logoInputRef} onChange={(e) => handleImageUpload(e, 'logo')} className="hidden" />
+            <input type="file" accept="image/*" ref={logoInputRef} onChange={(e) => handleFileSelect(e, 'logo')} className="hidden" />
           </div>
 
         </div>
@@ -227,6 +307,67 @@ export default function SettingsPage() {
           </div>
         </button>
       </div>
+
+      {/* Cropper Modal Overlay */}
+      {cropModalOpen && imageToCrop && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+              <h3 className="font-bold text-slate-900">Crop {cropType === 'logo' ? 'Logo' : 'Cover Photo'}</h3>
+              <button onClick={() => setCropModalOpen(false)} className="text-slate-400 hover:text-slate-700 transition">
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Cropper Area */}
+            <div className="relative w-full h-80 bg-slate-100 sm:h-96">
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={cropType === 'cover' ? 16 / 9 : 1 / 1}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+                objectFit="contain"
+              />
+            </div>
+
+            {/* Controls & Actions */}
+            <div className="p-6 bg-white space-y-6">
+              <div className="flex items-center gap-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Zoom</span>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-labelledby="Zoom"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+              </div>
+              
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setCropModalOpen(false)} 
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleCropAndUpload} 
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/30 active:scale-95 transition-all"
+                >
+                  Crop & Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
     </div>
   );
